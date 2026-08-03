@@ -40,9 +40,7 @@ function getMemberTag(member) {
     .filter(role => role.id !== member.guild.id)
     .sort((a, b) => b.position - a.position);
 
-  if (!roles.length) return 'Miembro';
-
-  return roles[0].name;
+  return roles.length ? roles[0].name : 'Miembro';
 }
 
 function roundRect(ctx, x, y, width, height, radius) {
@@ -51,12 +49,7 @@ function roundRect(ctx, x, y, width, height, radius) {
   ctx.lineTo(x + width - radius, y);
   ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
   ctx.lineTo(x + width, y + height - radius);
-  ctx.quadraticCurveTo(
-    x + width,
-    y + height,
-    x + width - radius,
-    y + height
-  );
+  ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
   ctx.lineTo(x + radius, y + height);
   ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
   ctx.lineTo(x, y + radius);
@@ -68,25 +61,20 @@ async function createWelcomeImage(member) {
   const canvas = createCanvas(1600, 900);
   const ctx = canvas.getContext('2d');
 
-  const bgPath = path.join(
-    __dirname,
-    'assets',
-    'background.jpg'
-  );
+  const bgPath = path.join(__dirname, 'assets', 'background.jpg');
 
   if (fs.existsSync(bgPath)) {
     const bg = await loadImage(bgPath);
     ctx.drawImage(bg, 0, 0, canvas.width, canvas.height);
   } else {
-    ctx.fillStyle = '#000';
+    ctx.fillStyle = '#000000';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
 
-  ctx.fillStyle = 'rgba(0,0,0,0.45)';
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  roundRect(ctx, 120, 70, 1360, 760, 35);
-
+  roundRect(ctx, 90, 60, 1420, 780, 40);
   ctx.fillStyle = 'rgba(255,255,255,0.08)';
   ctx.fill();
 
@@ -97,15 +85,13 @@ async function createWelcomeImage(member) {
 
   const response = await fetch(avatarURL);
   const buffer = Buffer.from(await response.arrayBuffer());
-
   const avatar = await loadImage(buffer);
 
-  const avatarSize = 240;
-  const avatarX = 680;
-  const avatarY = 80;
+  const avatarSize = 250;
+  const avatarX = canvas.width / 2 - avatarSize / 2;
+  const avatarY = 70;
 
   ctx.save();
-
   ctx.beginPath();
   ctx.arc(
     avatarX + avatarSize / 2,
@@ -114,7 +100,6 @@ async function createWelcomeImage(member) {
     0,
     Math.PI * 2
   );
-
   ctx.closePath();
   ctx.clip();
 
@@ -125,7 +110,6 @@ async function createWelcomeImage(member) {
     avatarSize,
     avatarSize
   );
-
   ctx.restore();
 
   ctx.beginPath();
@@ -142,43 +126,34 @@ async function createWelcomeImage(member) {
   ctx.stroke();
 
   ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  ctx.shadowColor = 'rgba(0,0,0,0.8)';
+  ctx.shadowBlur = 15;
 
   ctx.fillStyle = '#ffffff';
 
-  ctx.font = 'bold 110px Sans';
+  ctx.font = '90px Arial';
+  ctx.fillText('WELCOME', 800, 430);
+
+  ctx.font = '55px Arial';
+  ctx.fillText(member.user.username, 800, 520);
+
+  ctx.font = '38px Arial';
+  ctx.fillText(getMemberTag(member), 800, 590);
+
+  ctx.font = '30px Arial';
   ctx.fillText(
-    'WELCOME',
-    canvas.width / 2,
-    470
+    `Miembros: ${member.guild.memberCount}`,
+    800,
+    680
   );
 
-  ctx.font = 'bold 55px Sans';
-  ctx.fillText(
-    member.user.username,
-    canvas.width / 2,
-    550
-  );
-
-  ctx.font = 'bold 34px Sans';
-  ctx.fillText(
-    `Etiqueta: ${getMemberTag(member)}`,
-    canvas.width / 2,
-    620
-  );
-
-  ctx.font = '30px Sans';
-  ctx.fillText(
-    `Bienvenido a ${member.guild.name}`,
-    canvas.width / 2,
-    700
-  );
-
-  ctx.font = '24px Sans';
-  ctx.fillStyle = 'rgba(255,255,255,0.85)';
+  ctx.font = '28px Arial';
   ctx.fillText(
     'Have a great moment here!',
-    canvas.width / 2,
-    760
+    800,
+    740
   );
 
   return canvas.toBuffer('image/png');
@@ -190,15 +165,13 @@ client.once('ready', () => {
 
 client.on('guildMemberAdd', async member => {
   try {
-    const channel =
-      await member.guild.channels.fetch(
-        WELCOME_CHANNEL_ID
-      );
+    const channel = await member.guild.channels.fetch(
+      WELCOME_CHANNEL_ID
+    );
 
     if (!channel?.isTextBased()) return;
 
-    const image =
-      await createWelcomeImage(member);
+    const image = await createWelcomeImage(member);
 
     await channel.send({
       content: `👋 Bienvenido ${member}`,
@@ -209,7 +182,7 @@ client.on('guildMemberAdd', async member => {
       ]
     });
   } catch (err) {
-    console.error(err);
+    console.error('Error en bienvenida:', err);
   }
 });
 
@@ -218,10 +191,9 @@ client.on('messageCreate', async message => {
     if (message.author.bot) return;
 
     if (message.content.toLowerCase() === '!welcome') {
-      const image =
-        await createWelcomeImage(
-          message.member
-        );
+      const image = await createWelcomeImage(
+        message.member
+      );
 
       await message.reply({
         content: '🔍 Vista previa',
@@ -233,7 +205,7 @@ client.on('messageCreate', async message => {
       });
     }
   } catch (err) {
-    console.error(err);
+    console.error('Error en !welcome:', err);
   }
 });
 
