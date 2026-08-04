@@ -71,13 +71,16 @@ async function createWelcomeImage(member) {
     ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
 
-  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  // Oscurecer fondo
+  ctx.fillStyle = 'rgba(0,0,0,0.45)';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  roundRect(ctx, 90, 60, 1420, 780, 40);
-  ctx.fillStyle = 'rgba(255,255,255,0.08)';
+  // Panel principal
+  roundRect(ctx, 120, 60, 1360, 780, 40);
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
   ctx.fill();
 
+  // Avatar
   const avatarURL = member.user.displayAvatarURL({
     extension: 'png',
     size: 512
@@ -87,11 +90,12 @@ async function createWelcomeImage(member) {
   const buffer = Buffer.from(await response.arrayBuffer());
   const avatar = await loadImage(buffer);
 
-  const avatarSize = 250;
+  const avatarSize = 220;
   const avatarX = canvas.width / 2 - avatarSize / 2;
-  const avatarY = 70;
+  const avatarY = 80;
 
   ctx.save();
+
   ctx.beginPath();
   ctx.arc(
     avatarX + avatarSize / 2,
@@ -100,7 +104,7 @@ async function createWelcomeImage(member) {
     0,
     Math.PI * 2
   );
-  ctx.closePath();
+
   ctx.clip();
 
   ctx.drawImage(
@@ -110,6 +114,7 @@ async function createWelcomeImage(member) {
     avatarSize,
     avatarSize
   );
+
   ctx.restore();
 
   ctx.beginPath();
@@ -122,38 +127,47 @@ async function createWelcomeImage(member) {
   );
 
   ctx.lineWidth = 8;
-  ctx.strokeStyle = '#ffffff';
+  ctx.strokeStyle = '#FFFFFF';
   ctx.stroke();
 
+  // Configuración de texto
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
-  ctx.shadowColor = 'rgba(0,0,0,0.8)';
-  ctx.shadowBlur = 15;
+  ctx.shadowColor = '#000000';
+  ctx.shadowBlur = 20;
 
-  ctx.fillStyle = '#ffffff';
+  // Título
+  ctx.fillStyle = '#FFFFFF';
+  ctx.font = 'bold 100px sans-serif';
+  ctx.fillText('WELCOME', 800, 420);
 
-  ctx.font = '90px Arial';
-  ctx.fillText('WELCOME', 800, 430);
+  // Usuario
+  ctx.font = 'bold 60px sans-serif';
+  ctx.fillText(member.user.username, 800, 510);
 
-  ctx.font = '55px Arial';
-  ctx.fillText(member.user.username, 800, 520);
+  // Rango
+  ctx.font = 'bold 38px sans-serif';
+  ctx.fillText(
+    `Etiqueta: ${getMemberTag(member)}`,
+    800,
+    590
+  );
 
-  ctx.font = '38px Arial';
-  ctx.fillText(getMemberTag(member), 800, 590);
+  // Servidor
+  ctx.font = '32px sans-serif';
+  ctx.fillText(
+    `Bienvenido a ${member.guild.name}`,
+    800,
+    660
+  );
 
-  ctx.font = '30px Arial';
+  // Miembros
+  ctx.font = '30px sans-serif';
   ctx.fillText(
     `Miembros: ${member.guild.memberCount}`,
     800,
-    680
-  );
-
-  ctx.font = '28px Arial';
-  ctx.fillText(
-    'Have a great moment here!',
-    800,
-    740
+    720
   );
 
   return canvas.toBuffer('image/png');
