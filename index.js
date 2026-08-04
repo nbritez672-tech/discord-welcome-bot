@@ -6,7 +6,8 @@ const {
   AttachmentBuilder,
   REST,
   Routes,
-  SlashCommandBuilder
+  SlashCommandBuilder,
+  PermissionFlagsBits
 } = require('discord.js');
 
 const {
@@ -206,7 +207,211 @@ async function createWelcomeImage(member) {
   return canvas.toBuffer('image/png');
 }
 
-// ── Recordatorios ────────────────────────────────────────────────────────────
+// ── Moderación: filtro de links + spam ──────────────────────────────────────
+const ALLOWED_LINKS_FILE = path.join(__dirname, 'allowed-links.json');
+const WARNINGS_FILE      = path.join(__dirname, 'warnings.json');
+
+// Detecta cualquier URL (http/https) y también invitaciones de Discord sin protocolo
+const URL_REGEX = /(https?:\/\/[^\s]+)|(discord(?:\.gg|app\.com\/invite|\.com\/invite)\/[^\s]+)/gi;
+const DISCORD_INVITE_REGEX = /discord(?:\.gg|app\.com\/invite|\.com\/invite)\//i;
+
+function loadAllowedLinks() {
+  if (!fs.existsSync(ALLOWED_LINKS_FILE)) return [];
+  try {
+    return JSON.parse(fs.readFileSync(ALLOWED_LINKS_FILE, 'utf8'));
+  } catch {
+    return [];
+  }
+}
+
+function saveAllowedLinks(list) {
+  fs.writeFileSync(ALLOWED_LINKS_FILE, JSON.stringify(list, null, 2), 'utf8');
+}
+
+function loadWarnings() {
+  if (!fs.existsSync(WARNINGS_FILE)) return {};
+  try {
+    return JSON.parse(fs.readFileSync(WARNINGS_FILE, 'utf8'));
+  } catch {
+    return {};
+  }
+}
+
+function saveWarnings(data) {
+  fs.writeFileSync(WARNINGS_FILE, JSON.stringify(data, null, 2), 'utf8');
+}
+
+// Extrae el hostname (dominio) de una URL de forma segura
+function extractDomain(url) {
+  try {
+    const normalized = url.match(/^https?:\/\//i) ? url : `https://${url}`;
+    return new URL(normalized).hostname.replace(/^www\./i, '').toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
+// Revisa un mensaje y determina si contiene un link no permitido.
+// Devuelve el link ofensivo (string) o null si el mensaje no infringe nada.
+function findDisallowedLink(content, allowedDomains) {
+  const matches = content.match(URL_REGEX);
+  if (!matches) return null;
+
+  for (const raw of matches) {
+    // Cualquier invitación a otro servidor de Discord siempre está prohibida
+    if (DISCORD_INVITE_REGEX.test(raw)) {
+      return raw;
+    }
+    const domain = extractDomain(raw);
+    if (!domain) {
+      // No se pudo parsear -> por seguridad se trata como no permitido
+      return raw;
+    }
+    const isAllowed = allowedDomains.some(d =>
+      domain === d.toLowerCase() || domain.endsWith(`.${d.toLowerCase()}`)
+    );
+    if (!isAllowed) return raw;
+  }
+  return null;
+}
+
+// Genera la imagen de aviso (mismo estilo visual que la de bienvenida)
+async function createWarningImage(member, reasonText) {
+  const W = 860;
+  const H = 220;
+  const canvas = createCanvas(W, H);
+  const ctx = canvas.getContext('2d');
+
+  const bgGrad = ctx.createLinearGradient(0, 0, W, H);
+  bgGrad.addColorStop(0,   '#2e1a1a');
+  bgGrad.addColorStop(0.5, '#351e1e');
+  bgGrad.addColorStop(1,   '#2a1616');
+  ctx.fillStyle = bgGrad;
+  ctx.fillRect(0, 0, W, H);
+
+  const borderGrad = ctx.createLinearGradient(0, 0, W, 0);
+  borderGrad.addColorStop(0, '#ff4d4d');
+  borderGrad.addColorStop(1, '#ff8a5c');
+  ctx.fillStyle = borderGrad;
+  ctx.fillRect(0, 0, W, 3);
+  ctx.fillRect(0, H - 3, W, 3);
+
+  const avatarSize = 110;
+  const avatarX = 80 + avatarSize / 2;
+  const avatarY = H / 2;
+
+  ctx.beginPath();
+  ctx.arc(avatarX, avatarY, avatarSize / 2 + 5, 0, Math.PI * 2);
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = '#ff4d4d';
+  ctx.stroke();
+
+  const avatarResponse = await fetch(
+    member.user.displayAvatarURL({ extension: 'png', size: 512 })
+  );
+  const avatarBuffer = Buffer.from(await avatarResponse.arrayBuffer());
+  const avatar = await loadImage(avatarBuffer);
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(avatarX, avatarY, avatarSize / 2, 0, Math.PI * 2);
+  ctx.clip();
+  ctx.drawImage(avatar, avatarX - avatarSize / 2, avatarY - avatarSize / 2, avatarSize, avatarSize);
+  ctx.restore();
+
+  const textX = 80 + avatarSize + 40;
+  ctx.textBaseline = 'middle';
+  ctx.textAlign = 'left';
+
+  ctx.font = 'bold 30px "Inter"';
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillText(member.user.username, textX, 78);
+
+  ctx.font = 'bold 17px "Inter"';
+  ctx.fillStyle = '#ff4d4d';
+  wrapText(ctx, reasonText, textX, 118, W - textX - 40, 24);
+
+  return canvas.toBuffer('image/png');
+}
+
+// Utilidad simple para partir texto largo en varias líneas dentro del canvas
+function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
+  const words = text.split(' ');
+  let line = '';
+  let curY = y;
+  for (const word of words) {
+    const testLine = line ? `${line} ${word}` : word;
+    if (ctx.measureText(testLine).width > maxWidth && line) {
+      ctx.fillText(line, x, curY);
+      line = word;
+      curY += lineHeight;
+    } else {
+      line = testLine;
+    }
+  }
+  if (line) ctx.fillText(line, x, curY);
+}
+
+// Aplica una advertencia al usuario: borra el mensaje, manda la imagen de aviso,
+// y si ya es la 2da infracción, lo expulsa del servidor.
+async function applyModerationStrike(message, reasonText) {
+  const warnings = loadWarnings();
+  const guildId  = message.guild.id;
+  const userId   = message.author.id;
+
+  if (!warnings[guildId]) warnings[guildId] = {};
+  const current = (warnings[guildId][userId] || 0) + 1;
+  warnings[guildId][userId] = current;
+  saveWarnings(warnings);
+
+  // Borrar el mensaje infractor (puede fallar si ya no existe)
+  await message.delete().catch(() => {});
+
+  // Generar y enviar la imagen de aviso en el mismo canal
+  try {
+    const image = await createWarningImage(message.member, reasonText);
+    await message.channel.send({
+      files: [new AttachmentBuilder(image, { name: 'warning.png' })]
+    });
+  } catch (err) {
+    console.error('Error generando imagen de advertencia:', err);
+  }
+
+  // Segunda infracción -> kick
+  if (current >= 2) {
+    if (message.member.kickable) {
+      await message.member.kick('2da infracción: links/spam no permitido').catch(err => {
+        console.error('Error expulsando miembro:', err);
+      });
+      // Reiniciar el contador tras expulsar, para que si vuelve a entrar empiece de cero
+      warnings[guildId][userId] = 0;
+      saveWarnings(warnings);
+    } else {
+      console.error(`No se pudo expulsar a ${message.author.tag}: el bot no tiene permisos suficientes.`);
+    }
+  }
+}
+
+// ── Detección de spam por mensajes repetidos ────────────────────────────────
+// Guarda por usuario los últimos mensajes con su timestamp para detectar 3 iguales en 10s
+const recentMessages = new Map(); // userId -> [{ content, ts }]
+const SPAM_WINDOW_MS   = 10000;
+const SPAM_REPEAT_COUNT = 3;
+
+function registerMessageForSpamCheck(message) {
+  const userId = message.author.id;
+  const now = Date.now();
+  const history = recentMessages.get(userId) || [];
+
+  const updated = history.filter(m => now - m.ts < SPAM_WINDOW_MS);
+  updated.push({ content: message.content, ts: now });
+  recentMessages.set(userId, updated);
+
+  const sameCount = updated.filter(m => m.content === message.content).length;
+  return sameCount >= SPAM_REPEAT_COUNT;
+}
+
+
 const REMINDERS_FILE = path.join(__dirname, 'reminders.json');
 const activeTimers   = new Map(); // id -> intervalId
 
@@ -286,6 +491,31 @@ const deleteCommand = new SlashCommandBuilder()
       .setRequired(true)
   );
 
+// ── Comandos de moderación: whitelist de links ──────────────────────────────
+const listLinksCommand = new SlashCommandBuilder()
+  .setName('links-permitidos')
+  .setDescription('Muestra la lista de dominios permitidos en el servidor')
+  .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild);
+
+const editLinksCommand = new SlashCommandBuilder()
+  .setName('editar-links')
+  .setDescription('Agrega o quita un dominio de la lista de links permitidos')
+  .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+  .addStringOption(opt =>
+    opt.setName('accion')
+      .setDescription('Qué hacer con el dominio')
+      .setRequired(true)
+      .addChoices(
+        { name: 'Agregar', value: 'agregar' },
+        { name: 'Quitar', value: 'quitar' }
+      )
+  )
+  .addStringOption(opt =>
+    opt.setName('dominio')
+      .setDescription('Dominio a agregar o quitar (ej: youtube.com)')
+      .setRequired(true)
+  );
+
 client.once('ready', async () => {
   console.log(`✅ Bot listo como ${client.user.tag}`);
 
@@ -294,7 +524,12 @@ client.once('ready', async () => {
   try {
     await rest.put(
       Routes.applicationCommands(CLIENT_ID),
-      { body: [reminderCommand.toJSON(), deleteCommand.toJSON()] }
+      { body: [
+        reminderCommand.toJSON(),
+        deleteCommand.toJSON(),
+        listLinksCommand.toJSON(),
+        editLinksCommand.toJSON()
+      ] }
     );
     console.log('✅ Comandos slash registrados');
   } catch (err) {
@@ -379,6 +614,58 @@ client.on('interactionCreate', async interaction => {
       ephemeral: true
     });
   }
+
+  // ── /links-permitidos ────────────────────────────────────
+  if (interaction.commandName === 'links-permitidos') {
+    const allowed = loadAllowedLinks();
+    const listText = allowed.length
+      ? allowed.map(d => `• \`${d}\``).join('\n')
+      : '_No hay dominios permitidos configurados._';
+
+    await interaction.reply({
+      content: `🔗 **Dominios permitidos en este servidor:**\n${listText}`,
+      ephemeral: true
+    });
+  }
+
+  // ── /editar-links ────────────────────────────────────────
+  if (interaction.commandName === 'editar-links') {
+    const accion  = interaction.options.getString('accion');
+    const dominio = interaction.options.getString('dominio').toLowerCase().trim().replace(/^www\./i, '');
+
+    const allowed = loadAllowedLinks();
+
+    if (accion === 'agregar') {
+      if (allowed.includes(dominio)) {
+        return interaction.reply({
+          content: `❌ El dominio \`${dominio}\` ya está en la lista.`,
+          ephemeral: true
+        });
+      }
+      allowed.push(dominio);
+      saveAllowedLinks(allowed);
+      return interaction.reply({
+        content: `✅ Dominio \`${dominio}\` agregado a la lista de permitidos.`,
+        ephemeral: true
+      });
+    }
+
+    if (accion === 'quitar') {
+      const idx = allowed.indexOf(dominio);
+      if (idx === -1) {
+        return interaction.reply({
+          content: `❌ El dominio \`${dominio}\` no está en la lista.`,
+          ephemeral: true
+        });
+      }
+      allowed.splice(idx, 1);
+      saveAllowedLinks(allowed);
+      return interaction.reply({
+        content: `✅ Dominio \`${dominio}\` eliminado de la lista de permitidos.`,
+        ephemeral: true
+      });
+    }
+  }
 });
 client.on('guildMemberAdd', async (member) => {
   try {
@@ -406,6 +693,30 @@ client.on('guildMemberAdd', async (member) => {
 client.on('messageCreate', async message => {
   try {
     if (message.author.bot) return;
+    if (!message.guild) return;
+
+    // ── Moderación: link no permitido ──────────────────────
+    const allowedDomains = loadAllowedLinks();
+    const badLink = findDisallowedLink(message.content, allowedDomains);
+    if (badLink) {
+      await applyModerationStrike(
+        message,
+        'Attempting to send links from other channels, this is not allowed.'
+      );
+      return;
+    }
+
+    // ── Moderación: mensajes repetidos (spam) ──────────────
+    if (message.content.trim().length > 0) {
+      const isSpam = registerMessageForSpamCheck(message);
+      if (isSpam) {
+        await applyModerationStrike(
+          message,
+          'Sending repeated messages (spam) is not allowed.'
+        );
+        return;
+      }
+    }
 
     if (message.content.toLowerCase() === '!welcome') {
       const image = await createWelcomeImage(
