@@ -1,7 +1,5 @@
 require('dotenv').config();
 
-const fs = require('fs');
-const path = require('path');
 const {
   Client,
   GatewayIntentBits,
@@ -58,48 +56,50 @@ function roundRect(ctx, x, y, width, height, radius) {
 }
 
 async function createWelcomeImage(member) {
-  const W = 1100;
-  const H = 420;
+  const W = 860;
+  const H = 280;
   const canvas = createCanvas(W, H);
   const ctx = canvas.getContext('2d');
 
-  // Fondo
-  const bgPath = path.join(__dirname, 'assets', 'background.jpg');
-  if (fs.existsSync(bgPath)) {
-    const bg = await loadImage(bgPath);
-    const scale = Math.max(W / bg.width, H / bg.height);
-    const sw = bg.width * scale;
-    const sh = bg.height * scale;
-    ctx.drawImage(bg, (W - sw) / 2, (H - sh) / 2, sw, sh);
-  } else {
-    ctx.fillStyle = '#1a1a2e';
-    ctx.fillRect(0, 0, W, H);
-  }
-
-  // Oscurecer fondo fuerte para que los textos sean legibles
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
+  // ── Fondo: degradado oscuro azulado igual a la referencia ──
+  const bgGrad = ctx.createLinearGradient(0, 0, W, H);
+  bgGrad.addColorStop(0,   '#1a1c2e');
+  bgGrad.addColorStop(0.5, '#1e2235');
+  bgGrad.addColorStop(1,   '#16182a');
+  ctx.fillStyle = bgGrad;
   ctx.fillRect(0, 0, W, H);
 
-  // Gradiente extra oscuro en la mitad inferior (zona de textos)
-  const grad = ctx.createLinearGradient(0, H * 0.45, 0, H);
-  grad.addColorStop(0, 'rgba(0,0,0,0)');
-  grad.addColorStop(1, 'rgba(0,0,0,0.55)');
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, H * 0.45, W, H * 0.55);
+  // Borde exterior sutil (línea superior degradado rosa-azul como la referencia)
+  const borderGrad = ctx.createLinearGradient(0, 0, W, 0);
+  borderGrad.addColorStop(0,   '#ff6ec7');
+  borderGrad.addColorStop(0.5, '#a78bfa');
+  borderGrad.addColorStop(1,   '#60a5fa');
+  ctx.fillStyle = borderGrad;
+  ctx.fillRect(0, 0, W, 3);
+
+  // Borde inferior mismo degradado
+  ctx.fillStyle = borderGrad;
+  ctx.fillRect(0, H - 3, W, 3);
 
   // ── Avatar ──────────────────────────────────────────────
-  const avatarSize = 160;
-  const avatarX = W / 2;
-  const avatarY = 110;  // centro del círculo
+  const avatarSize = 140;
+  const avatarX    = 80 + avatarSize / 2;   // centro X
+  const avatarY    = H / 2;                  // centro Y
 
-  // Borde blanco circular
+  // Anillo degradado alrededor del avatar
+  const ringGrad = ctx.createLinearGradient(
+    avatarX - avatarSize / 2, avatarY - avatarSize / 2,
+    avatarX + avatarSize / 2, avatarY + avatarSize / 2
+  );
+  ringGrad.addColorStop(0, '#ff6ec7');
+  ringGrad.addColorStop(1, '#60a5fa');
   ctx.beginPath();
-  ctx.arc(avatarX, avatarY, avatarSize / 2 + 7, 0, Math.PI * 2);
-  ctx.lineWidth = 7;
-  ctx.strokeStyle = '#FFFFFF';
+  ctx.arc(avatarX, avatarY, avatarSize / 2 + 5, 0, Math.PI * 2);
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = ringGrad;
   ctx.stroke();
 
-  // Clip circular para el avatar
+  // Foto del avatar con clip circular
   const avatarResponse = await fetch(
     member.user.displayAvatarURL({ extension: 'png', size: 512 })
   );
@@ -110,31 +110,73 @@ async function createWelcomeImage(member) {
   ctx.beginPath();
   ctx.arc(avatarX, avatarY, avatarSize / 2, 0, Math.PI * 2);
   ctx.clip();
-  ctx.drawImage(avatar, avatarX - avatarSize / 2, avatarY - avatarSize / 2, avatarSize, avatarSize);
+  ctx.drawImage(
+    avatar,
+    avatarX - avatarSize / 2,
+    avatarY - avatarSize / 2,
+    avatarSize,
+    avatarSize
+  );
   ctx.restore();
 
-  // ── Textos ───────────────────────────────────────────────
-  ctx.textAlign = 'center';
+  // ── Línea divisora vertical ──────────────────────────────
+  const divX = 80 + avatarSize + 40;
+  const divGrad = ctx.createLinearGradient(0, 40, 0, H - 40);
+  divGrad.addColorStop(0,   'rgba(167,139,250,0)');
+  divGrad.addColorStop(0.3, 'rgba(167,139,250,0.8)');
+  divGrad.addColorStop(0.7, 'rgba(167,139,250,0.8)');
+  divGrad.addColorStop(1,   'rgba(167,139,250,0)');
+  ctx.fillStyle = divGrad;
+  ctx.fillRect(divX, 40, 2, H - 80);
+
+  // ── Textos (zona derecha) ────────────────────────────────
+  const textX = divX + 36;
   ctx.textBaseline = 'middle';
-  ctx.shadowColor = 'rgba(0,0,0,1)';
-  ctx.shadowBlur = 22;
+  ctx.shadowColor  = 'rgba(0,0,0,0.8)';
+  ctx.shadowBlur   = 10;
 
-  // "Welcome"
+  // "✦ ¡BIENVENIDO/A AL SERVIDOR! ✦"
+  ctx.textAlign = 'left';
+  ctx.font      = 'bold 13px sans-serif';
+  const tagGrad = ctx.createLinearGradient(textX, 0, textX + 340, 0);
+  tagGrad.addColorStop(0, '#ff6ec7');
+  tagGrad.addColorStop(1, '#60a5fa');
+  ctx.fillStyle = tagGrad;
+  ctx.fillText('✦  ¡BIENVENIDO/A AL SERVIDOR!  ✦', textX, 88);
+
+  // Nombre de usuario — grande y blanco
+  ctx.font      = 'bold 52px sans-serif';
   ctx.fillStyle = '#FFFFFF';
-  ctx.font = 'bold 68px sans-serif';
-  ctx.fillText('Welcome', W / 2, 255);
+  ctx.fillText(member.user.username, textX, 148);
 
-  // Username + número de miembro
-  ctx.font = 'bold 36px sans-serif';
-  ctx.fillStyle = '#EEEEEE';
-  ctx.fillText(`${member.user.username} • #${member.guild.memberCount}`, W / 2, 320);
+  // "en Yin Yang | Script Hub"
+  ctx.font      = '22px sans-serif';
+  ctx.fillStyle = '#8b9dc3';
+  ctx.fillText(`en ${member.guild.name}`, textX, 196);
 
-  // Subtítulo
-  ctx.font = 'italic 26px sans-serif';
-  ctx.fillStyle = '#CCCCCC';
-  ctx.fillText('Have a great moment here!', W / 2, 372);
-
+  // Badge "🛡 MIEMBRO  #52"
+  const badgeX = textX;
+  const badgeY = 228;
+  const badgeW = 180;
+  const badgeH = 30;
   ctx.shadowBlur = 0;
+
+  // Fondo del badge
+  ctx.fillStyle = 'rgba(255,255,255,0.08)';
+  roundRect(ctx, badgeX, badgeY - badgeH / 2, badgeW, badgeH, 6);
+  ctx.fill();
+
+  // Borde del badge
+  ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+  ctx.lineWidth   = 1;
+  roundRect(ctx, badgeX, badgeY - badgeH / 2, badgeW, badgeH, 6);
+  ctx.stroke();
+
+  // Texto del badge
+  ctx.font      = 'bold 13px sans-serif';
+  ctx.fillStyle = '#c0cde8';
+  ctx.textAlign = 'left';
+  ctx.fillText(`🛡  MIEMBRO  #${member.guild.memberCount}`, badgeX + 10, badgeY);
 
   return canvas.toBuffer('image/png');
 }
