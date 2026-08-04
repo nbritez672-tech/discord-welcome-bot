@@ -3,7 +3,10 @@ require('dotenv').config();
 const {
   Client,
   GatewayIntentBits,
-  AttachmentBuilder
+  AttachmentBuilder,
+  REST,
+  Routes,
+  SlashCommandBuilder
 } = require('discord.js');
 
 const {
@@ -29,14 +32,18 @@ async function loadFonts() {
   console.log('✅ Fuente Inter registrada');
 }
 
-const TOKEN = process.env.TOKEN;
+const TOKEN          = process.env.TOKEN;
+const CLIENT_ID      = process.env.CLIENT_ID;
 const WELCOME_CHANNEL_ID = process.env.WELCOME_CHANNEL_ID;
 
 if (!TOKEN) {
   console.error('Falta TOKEN.');
   process.exit(1);
 }
-
+if (!CLIENT_ID) {
+  console.error('Falta CLIENT_ID.');
+  process.exit(1);
+}
 if (!WELCOME_CHANNEL_ID) {
   console.error('Falta WELCOME_CHANNEL_ID.');
   process.exit(1);
@@ -199,11 +206,180 @@ async function createWelcomeImage(member) {
   return canvas.toBuffer('image/png');
 }
 
-client.once('ready', () => {
+// ── Recordatorios ────────────────────────────────────────────────────────────
+const REMINDERS_FILE = path.join(__dirname, 'reminders.json');
+const activeTimers   = new Map(); // id -> intervalId
+
+function loadReminders() {
+  if (!fs.existsSync(REMINDERS_FILE)) return [];
+  try {
+    return JSON.parse(fs.readFileSync(REMINDERS_FILE, 'utf8'));
+  } catch {
+    return [];
+  }
+}
+
+function saveReminders(reminders) {
+  fs.writeFileSync(REMINDERS_FILE, JSON.stringify(reminders, null, 2), 'utf8');
+}
+
+function startReminder(reminder) {
+  if (activeTimers.has(reminder.id)) return;
+
+  const ms = reminder.intervalMs;
+  const timer = setInterval(async () => {
+    try {
+      const channel = await client.channels.fetch(reminder.channelId);
+      if (channel?.isTextBased()) {
+        await channel.send(reminder.message);
+      }
+    } catch (err) {
+      console.error(`Error enviando recordatorio ${reminder.id}:`, err);
+    }
+  }, ms);
+
+  activeTimers.set(reminder.id, timer);
+  console.log(`✅ Recordatorio "${reminder.id}" activo cada ${ms / 60000} min`);
+}
+
+function parseInterval(str) {
+  // Acepta: 30m, 2h, 1d, 90s
+  const match = str.trim().match(/^(\d+)(s|m|h|d)$/i);
+  if (!match) return null;
+  const val  = parseInt(match[1]);
+  const unit = match[2].toLowerCase();
+  const mult = { s: 1000, m: 60000, h: 3600000, d: 86400000 };
+  return val * mult[unit];
+}
+
+// Comando slash de recordatorio
+const reminderCommand = new SlashCommandBuilder()
+  .setName('recordatorio')
+  .setDescription('Crea un recordatorio periódico')
+  .addStringOption(opt =>
+    opt.setName('intervalo')
+      .setDescription('Cada cuánto enviar (ej: 30m, 2h, 1d)')
+      .setRequired(true)
+  )
+  .addChannelOption(opt =>
+    opt.setName('canal')
+      .setDescription('Canal donde se enviará el mensaje')
+      .setRequired(true)
+  )
+  .addStringOption(opt =>
+    opt.setName('mensaje')
+      .setDescription('Mensaje del recordatorio')
+      .setRequired(true)
+  )
+  .addStringOption(opt =>
+    opt.setName('id')
+      .setDescription('Nombre único para este recordatorio (para poder borrarlo)')
+      .setRequired(true)
+  );
+
+const deleteCommand = new SlashCommandBuilder()
+  .setName('borrar-recordatorio')
+  .setDescription('Elimina un recordatorio activo')
+  .addStringOption(opt =>
+    opt.setName('id')
+      .setDescription('ID del recordatorio a borrar')
+      .setRequired(true)
+  );
+
+client.once('ready', async () => {
   console.log(`✅ Bot listo como ${client.user.tag}`);
+
+  // Registrar comandos slash
+  const rest = new REST({ version: '10' }).setToken(TOKEN);
+  try {
+    await rest.put(
+      Routes.applicationCommands(CLIENT_ID),
+      { body: [reminderCommand.toJSON(), deleteCommand.toJSON()] }
+    );
+    console.log('✅ Comandos slash registrados');
+  } catch (err) {
+    console.error('Error registrando comandos:', err);
+  }
+
+  // Arrancar recordatorios guardados
+  const reminders = loadReminders();
+  for (const r of reminders) {
+    startReminder(r);
+  }
 });
 
-client.on('guildMemberAdd', async member => {
+client.on('interactionCreate', async interaction => {
+  if (!interaction.isChatInputCommand()) return;
+
+  // ── /recordatorio ───────────────────────────────────────
+  if (interaction.commandName === 'recordatorio') {
+    const intervalStr = interaction.options.getString('intervalo');
+    const channel     = interaction.options.getChannel('canal');
+    const message     = interaction.options.getString('mensaje');
+    const id          = interaction.options.getString('id').toLowerCase().replace(/\s+/g, '-');
+
+    const ms = parseInterval(intervalStr);
+    if (!ms) {
+      return interaction.reply({
+        content: '❌ Formato de intervalo inválido. Usá: `30m`, `2h`, `1d`, `90s`',
+        ephemeral: true
+      });
+    }
+
+    if (ms < 60000) {
+      return interaction.reply({
+        content: '❌ El intervalo mínimo es 1 minuto.',
+        ephemeral: true
+      });
+    }
+
+    const reminders = loadReminders();
+    if (reminders.find(r => r.id === id)) {
+      return interaction.reply({
+        content: `❌ Ya existe un recordatorio con el ID \`${id}\`. Elegí otro nombre.`,
+        ephemeral: true
+      });
+    }
+
+    const reminder = { id, channelId: channel.id, message, intervalMs: ms };
+    reminders.push(reminder);
+    saveReminders(reminders);
+    startReminder(reminder);
+
+    const humanInterval = intervalStr.toLowerCase();
+    await interaction.reply({
+      content: `✅ Recordatorio \`${id}\` creado.\n📣 Canal: <#${channel.id}>\n⏱ Cada: **${humanInterval}**\n💬 Mensaje: ${message}`,
+      ephemeral: true
+    });
+  }
+
+  // ── /borrar-recordatorio ────────────────────────────────
+  if (interaction.commandName === 'borrar-recordatorio') {
+    const id = interaction.options.getString('id').toLowerCase().replace(/\s+/g, '-');
+
+    const reminders = loadReminders();
+    const idx = reminders.findIndex(r => r.id === id);
+    if (idx === -1) {
+      return interaction.reply({
+        content: `❌ No encontré ningún recordatorio con el ID \`${id}\`.`,
+        ephemeral: true
+      });
+    }
+
+    reminders.splice(idx, 1);
+    saveReminders(reminders);
+
+    if (activeTimers.has(id)) {
+      clearInterval(activeTimers.get(id));
+      activeTimers.delete(id);
+    }
+
+    await interaction.reply({
+      content: `✅ Recordatorio \`${id}\` eliminado.`,
+      ephemeral: true
+    });
+  }
+});
   try {
     const channel = await member.guild.channels.fetch(
       WELCOME_CHANNEL_ID
