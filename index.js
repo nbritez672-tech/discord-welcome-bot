@@ -58,117 +58,89 @@ function roundRect(ctx, x, y, width, height, radius) {
 }
 
 async function createWelcomeImage(member) {
-  const canvas = createCanvas(1600, 900);
+  const W = 1100;
+  const H = 450;
+  const canvas = createCanvas(W, H);
   const ctx = canvas.getContext('2d');
 
+  // Fondo
   const bgPath = path.join(__dirname, 'assets', 'background.jpg');
-
   if (fs.existsSync(bgPath)) {
     const bg = await loadImage(bgPath);
-    ctx.drawImage(bg, 0, 0, canvas.width, canvas.height);
+    // Escalar cubriendo todo el canvas (object-fit: cover)
+    const scale = Math.max(W / bg.width, H / bg.height);
+    const sw = bg.width * scale;
+    const sh = bg.height * scale;
+    ctx.drawImage(bg, (W - sw) / 2, (H - sh) / 2, sw, sh);
   } else {
-    ctx.fillStyle = '#000000';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#1a1a2e';
+    ctx.fillRect(0, 0, W, H);
   }
 
-  // Oscurecer fondo
-  ctx.fillStyle = 'rgba(0,0,0,0.45)';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  // Oscurecer fondo para legibilidad
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.50)';
+  ctx.fillRect(0, 0, W, H);
 
-  // Panel principal
-  roundRect(ctx, 120, 60, 1360, 780, 40);
-  ctx.fillStyle = 'rgba(0,0,0,0.35)';
-  ctx.fill();
+  // ── Avatar ──────────────────────────────────────────────
+  const avatarSize = 180;
+  const avatarX = W / 2;
+  const avatarY = 130;
 
-  // Avatar
-  const avatarURL = member.user.displayAvatarURL({
-    extension: 'png',
-    size: 512
-  });
-
-  const response = await fetch(avatarURL);
-  const buffer = Buffer.from(await response.arrayBuffer());
-  const avatar = await loadImage(buffer);
-
-  const avatarSize = 220;
-  const avatarX = canvas.width / 2 - avatarSize / 2;
-  const avatarY = 80;
-
+  // Sombra del círculo
   ctx.save();
-
+  ctx.shadowColor = 'rgba(0,0,0,0.7)';
+  ctx.shadowBlur = 30;
   ctx.beginPath();
-  ctx.arc(
-    avatarX + avatarSize / 2,
-    avatarY + avatarSize / 2,
-    avatarSize / 2,
-    0,
-    Math.PI * 2
-  );
-
-  ctx.clip();
-
-  ctx.drawImage(
-    avatar,
-    avatarX,
-    avatarY,
-    avatarSize,
-    avatarSize
-  );
-
+  ctx.arc(avatarX, avatarY, avatarSize / 2 + 8, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(0,0,0,0)';
+  ctx.fill();
   ctx.restore();
 
+  // Borde blanco circular
   ctx.beginPath();
-  ctx.arc(
-    avatarX + avatarSize / 2,
-    avatarY + avatarSize / 2,
-    avatarSize / 2 + 6,
-    0,
-    Math.PI * 2
-  );
-
-  ctx.lineWidth = 8;
+  ctx.arc(avatarX, avatarY, avatarSize / 2 + 7, 0, Math.PI * 2);
+  ctx.lineWidth = 6;
   ctx.strokeStyle = '#FFFFFF';
   ctx.stroke();
 
-  // Configuración de texto
+  // Clip circular para el avatar
+  const avatarResponse = await fetch(
+    member.user.displayAvatarURL({ extension: 'png', size: 512 })
+  );
+  const avatarBuffer = Buffer.from(await avatarResponse.arrayBuffer());
+  const avatar = await loadImage(avatarBuffer);
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(avatarX, avatarY, avatarSize / 2, 0, Math.PI * 2);
+  ctx.clip();
+  ctx.drawImage(avatar, avatarX - avatarSize / 2, avatarY - avatarSize / 2, avatarSize, avatarSize);
+  ctx.restore();
+
+  // ── Textos ───────────────────────────────────────────────
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
-  ctx.shadowColor = '#000000';
-  ctx.shadowBlur = 20;
+  // Sombra general para todos los textos
+  ctx.shadowColor = 'rgba(0,0,0,0.9)';
+  ctx.shadowBlur = 18;
 
-  // Título
+  // "Welcome"
   ctx.fillStyle = '#FFFFFF';
-  ctx.font = 'bold 100px sans-serif';
-  ctx.fillText('WELCOME', 800, 420);
+  ctx.font = 'bold 72px sans-serif';
+  ctx.fillText('Welcome', W / 2, 290);
 
-  // Usuario
-  ctx.font = 'bold 60px sans-serif';
-  ctx.fillText(member.user.username, 800, 510);
-
-  // Rango
+  // Username
   ctx.font = 'bold 38px sans-serif';
-  ctx.fillText(
-    `Etiqueta: ${getMemberTag(member)}`,
-    800,
-    590
-  );
+  ctx.fillStyle = '#E0E0E0';
+  ctx.fillText(member.user.username, W / 2, 355);
 
-  // Servidor
-  ctx.font = '32px sans-serif';
-  ctx.fillText(
-    `Bienvenido a ${member.guild.name}`,
-    800,
-    660
-  );
+  // Subtítulo
+  ctx.font = 'italic 28px sans-serif';
+  ctx.fillStyle = '#CCCCCC';
+  ctx.fillText('Have a great moment here!', W / 2, 405);
 
-  // Miembros
-  ctx.font = '30px sans-serif';
-  ctx.fillText(
-    `Miembros: ${member.guild.memberCount}`,
-    800,
-    720
-  );
+  ctx.shadowBlur = 0;
 
   return canvas.toBuffer('image/png');
 }
