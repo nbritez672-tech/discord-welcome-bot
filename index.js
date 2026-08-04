@@ -12,16 +12,21 @@ const {
   GlobalFonts
 } = require('@napi-rs/canvas');
 
-// Cargar fuentes del sistema (disponibles en Railway/Linux)
-GlobalFonts.loadSystemFonts();
-// Registrar alias por si el nombre del sistema difiere
-const { execSync } = require('child_process');
-try {
-  const fontPath = execSync('fc-list : file | grep -i "dejavu.*sans.*Bold" | head -1')
-    .toString().trim().replace(':','').trim();
-  if (fontPath) GlobalFonts.registerFromPath(fontPath, 'MainFont');
-} catch(e) {
-  // Si no hay fc-list, confiar en loadSystemFonts
+const os = require('os');
+const fs = require('fs');
+const path = require('path');
+
+// Descargar y registrar fuente al arrancar — garantizado en cualquier entorno
+async function loadFonts() {
+  const fontUrl = 'https://fonts.gstatic.com/s/inter/v13/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfAZ9hiA.woff2';
+  const fontPath = path.join(os.tmpdir(), 'Inter-Bold.woff2');
+  if (!fs.existsSync(fontPath)) {
+    const res = await fetch(fontUrl);
+    const buf = Buffer.from(await res.arrayBuffer());
+    fs.writeFileSync(fontPath, buf);
+  }
+  GlobalFonts.registerFromPath(fontPath, 'Inter');
+  console.log('✅ Fuente Inter registrada');
 }
 
 const TOKEN = process.env.TOKEN;
@@ -150,7 +155,7 @@ async function createWelcomeImage(member) {
 
   // "✦ ¡BIENVENIDO/A AL SERVIDOR! ✦"
   ctx.textAlign = 'left';
-  ctx.font      = 'bold 13px "DejaVu Sans"';
+  ctx.font      = 'bold 13px "Inter"';
   const tagGrad = ctx.createLinearGradient(textX, 0, textX + 340, 0);
   tagGrad.addColorStop(0, '#ff6ec7');
   tagGrad.addColorStop(1, '#60a5fa');
@@ -158,12 +163,12 @@ async function createWelcomeImage(member) {
   ctx.fillText('✦  ¡BIENVENIDO/A AL SERVIDOR!  ✦', textX, 88);
 
   // Nombre de usuario — grande y blanco
-  ctx.font      = 'bold 52px "DejaVu Sans"';
+  ctx.font      = 'bold 52px "Inter"';
   ctx.fillStyle = '#FFFFFF';
   ctx.fillText(member.user.username, textX, 148);
 
   // "en Yin Yang | Script Hub"
-  ctx.font      = '22px "DejaVu Sans"';
+  ctx.font      = '22px "Inter"';
   ctx.fillStyle = '#8b9dc3';
   ctx.fillText(`en ${member.guild.name}`, textX, 196);
 
@@ -186,7 +191,7 @@ async function createWelcomeImage(member) {
   ctx.stroke();
 
   // Texto del badge
-  ctx.font      = 'bold 13px "DejaVu Sans"';
+  ctx.font      = 'bold 13px "Inter"';
   ctx.fillStyle = '#c0cde8';
   ctx.textAlign = 'left';
   ctx.fillText(`MIEMBRO  #${member.guild.memberCount}`, badgeX + 10, badgeY);
@@ -244,4 +249,9 @@ client.on('messageCreate', async message => {
   }
 });
 
-client.login(TOKEN);
+loadFonts().then(() => {
+  client.login(TOKEN);
+}).catch(err => {
+  console.error('Error cargando fuentes:', err);
+  client.login(TOKEN);
+});
