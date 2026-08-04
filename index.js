@@ -380,6 +380,7 @@ client.on('interactionCreate', async interaction => {
     });
   }
 });
+client.on('guildMemberAdd', async (member) => {
   try {
     const channel = await member.guild.channels.fetch(
       WELCOME_CHANNEL_ID
