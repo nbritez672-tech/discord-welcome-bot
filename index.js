@@ -8,8 +8,21 @@ const {
 
 const {
   createCanvas,
-  loadImage
+  loadImage,
+  GlobalFonts
 } = require('@napi-rs/canvas');
+
+// Cargar fuentes del sistema (disponibles en Railway/Linux)
+GlobalFonts.loadSystemFonts();
+// Registrar alias por si el nombre del sistema difiere
+const { execSync } = require('child_process');
+try {
+  const fontPath = execSync('fc-list : file | grep -i "dejavu.*sans.*Bold" | head -1')
+    .toString().trim().replace(':','').trim();
+  if (fontPath) GlobalFonts.registerFromPath(fontPath, 'MainFont');
+} catch(e) {
+  // Si no hay fc-list, confiar en loadSystemFonts
+}
 
 const TOKEN = process.env.TOKEN;
 const WELCOME_CHANNEL_ID = process.env.WELCOME_CHANNEL_ID;
@@ -137,7 +150,7 @@ async function createWelcomeImage(member) {
 
   // "✦ ¡BIENVENIDO/A AL SERVIDOR! ✦"
   ctx.textAlign = 'left';
-  ctx.font      = 'bold 13px sans-serif';
+  ctx.font      = 'bold 13px "DejaVu Sans"';
   const tagGrad = ctx.createLinearGradient(textX, 0, textX + 340, 0);
   tagGrad.addColorStop(0, '#ff6ec7');
   tagGrad.addColorStop(1, '#60a5fa');
@@ -145,12 +158,12 @@ async function createWelcomeImage(member) {
   ctx.fillText('✦  ¡BIENVENIDO/A AL SERVIDOR!  ✦', textX, 88);
 
   // Nombre de usuario — grande y blanco
-  ctx.font      = 'bold 52px sans-serif';
+  ctx.font      = 'bold 52px "DejaVu Sans"';
   ctx.fillStyle = '#FFFFFF';
   ctx.fillText(member.user.username, textX, 148);
 
   // "en Yin Yang | Script Hub"
-  ctx.font      = '22px sans-serif';
+  ctx.font      = '22px "DejaVu Sans"';
   ctx.fillStyle = '#8b9dc3';
   ctx.fillText(`en ${member.guild.name}`, textX, 196);
 
@@ -173,10 +186,10 @@ async function createWelcomeImage(member) {
   ctx.stroke();
 
   // Texto del badge
-  ctx.font      = 'bold 13px sans-serif';
+  ctx.font      = 'bold 13px "DejaVu Sans"';
   ctx.fillStyle = '#c0cde8';
   ctx.textAlign = 'left';
-  ctx.fillText(`🛡  MIEMBRO  #${member.guild.memberCount}`, badgeX + 10, badgeY);
+  ctx.fillText(`MIEMBRO  #${member.guild.memberCount}`, badgeX + 10, badgeY);
 
   return canvas.toBuffer('image/png');
 }
