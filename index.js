@@ -59,7 +59,7 @@ function roundRect(ctx, x, y, width, height, radius) {
 
 async function createWelcomeImage(member) {
   const W = 1100;
-  const H = 450;
+  const H = 420;
   const canvas = createCanvas(W, H);
   const ctx = canvas.getContext('2d');
 
@@ -67,7 +67,6 @@ async function createWelcomeImage(member) {
   const bgPath = path.join(__dirname, 'assets', 'background.jpg');
   if (fs.existsSync(bgPath)) {
     const bg = await loadImage(bgPath);
-    // Escalar cubriendo todo el canvas (object-fit: cover)
     const scale = Math.max(W / bg.width, H / bg.height);
     const sw = bg.width * scale;
     const sh = bg.height * scale;
@@ -77,29 +76,26 @@ async function createWelcomeImage(member) {
     ctx.fillRect(0, 0, W, H);
   }
 
-  // Oscurecer fondo para legibilidad
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.50)';
+  // Oscurecer fondo fuerte para que los textos sean legibles
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
   ctx.fillRect(0, 0, W, H);
 
-  // ── Avatar ──────────────────────────────────────────────
-  const avatarSize = 180;
-  const avatarX = W / 2;
-  const avatarY = 130;
+  // Gradiente extra oscuro en la mitad inferior (zona de textos)
+  const grad = ctx.createLinearGradient(0, H * 0.45, 0, H);
+  grad.addColorStop(0, 'rgba(0,0,0,0)');
+  grad.addColorStop(1, 'rgba(0,0,0,0.55)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, H * 0.45, W, H * 0.55);
 
-  // Sombra del círculo
-  ctx.save();
-  ctx.shadowColor = 'rgba(0,0,0,0.7)';
-  ctx.shadowBlur = 30;
-  ctx.beginPath();
-  ctx.arc(avatarX, avatarY, avatarSize / 2 + 8, 0, Math.PI * 2);
-  ctx.fillStyle = 'rgba(0,0,0,0)';
-  ctx.fill();
-  ctx.restore();
+  // ── Avatar ──────────────────────────────────────────────
+  const avatarSize = 160;
+  const avatarX = W / 2;
+  const avatarY = 110;  // centro del círculo
 
   // Borde blanco circular
   ctx.beginPath();
   ctx.arc(avatarX, avatarY, avatarSize / 2 + 7, 0, Math.PI * 2);
-  ctx.lineWidth = 6;
+  ctx.lineWidth = 7;
   ctx.strokeStyle = '#FFFFFF';
   ctx.stroke();
 
@@ -120,25 +116,23 @@ async function createWelcomeImage(member) {
   // ── Textos ───────────────────────────────────────────────
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-
-  // Sombra general para todos los textos
-  ctx.shadowColor = 'rgba(0,0,0,0.9)';
-  ctx.shadowBlur = 18;
+  ctx.shadowColor = 'rgba(0,0,0,1)';
+  ctx.shadowBlur = 22;
 
   // "Welcome"
   ctx.fillStyle = '#FFFFFF';
-  ctx.font = 'bold 72px sans-serif';
-  ctx.fillText('Welcome', W / 2, 290);
+  ctx.font = 'bold 68px sans-serif';
+  ctx.fillText('Welcome', W / 2, 255);
 
-  // Username
-  ctx.font = 'bold 38px sans-serif';
-  ctx.fillStyle = '#E0E0E0';
-  ctx.fillText(member.user.username, W / 2, 355);
+  // Username + número de miembro
+  ctx.font = 'bold 36px sans-serif';
+  ctx.fillStyle = '#EEEEEE';
+  ctx.fillText(`${member.user.username} • #${member.guild.memberCount}`, W / 2, 320);
 
   // Subtítulo
-  ctx.font = 'italic 28px sans-serif';
+  ctx.font = 'italic 26px sans-serif';
   ctx.fillStyle = '#CCCCCC';
-  ctx.fillText('Have a great moment here!', W / 2, 405);
+  ctx.fillText('Have a great moment here!', W / 2, 372);
 
   ctx.shadowBlur = 0;
 
