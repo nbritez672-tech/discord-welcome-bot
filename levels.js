@@ -99,18 +99,18 @@ async function registerMessage(guildId, userId, username, joinedTimestamp) {
     Math.random() * (XP_MESSAGE_MAX - XP_MESSAGE_MIN + 1) + XP_MESSAGE_MIN
   );
 
-  // Incrementar contador de mensajes en MongoDB
+  // addXp maneja la creación del documento si no existe
+  // e incrementa el contador de mensajes internamente
+  const result = await addXp(guildId, userId, xp, username, joinedTimestamp);
+
+  // Incrementar contador de mensajes por separado (sin tocar xp)
   await connectDB();
   await col().updateOne(
     { guildId, userId },
-    {
-      $inc: { messages: 1 },
-      $setOnInsert: { xp: 0, joinedTimestamp: joinedTimestamp || now, username },
-    },
-    { upsert: true }
+    { $inc: { messages: 1 } }
   );
 
-  return addXp(guildId, userId, xp, username, joinedTimestamp);
+  return result;
 }
 
 async function registerReaction(guildId, userId, username) {
