@@ -163,6 +163,24 @@ async function getLeaderboard(guildId, limit = 10) {
   return users.map(u => ({ ...u, ...calculateLevel(u.xp) }));
 }
 
+/**
+ * Guarda el número de miembro cuando entra al servidor.
+ * Solo lo setea si no existe ya (para no sobreescribir).
+ */
+async function setMemberNumber(guildId, userId, memberNumber) {
+  await connectDB();
+  await col().updateOne(
+    { guildId, userId },
+    { $setOnInsert: { guildId, userId, xp: 0, messages: 0, memberNumber } },
+    { upsert: true }
+  );
+  // Si ya existe el documento, actualizar solo si no tiene memberNumber
+  await col().updateOne(
+    { guildId, userId, memberNumber: { $exists: false } },
+    { $set: { memberNumber } }
+  );
+}
+
 module.exports = {
   connectDB,
   addXp,
@@ -175,4 +193,5 @@ module.exports = {
   getLeaderboard,
   calculateLevel,
   xpForLevel,
+  setMemberNumber,
 };
