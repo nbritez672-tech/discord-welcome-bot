@@ -548,11 +548,7 @@ client.on('interactionCreate', async interaction => {
 
     const target  = interaction.options.getUser('usuario') || interaction.user;
     const member  = await interaction.guild.members.fetch(target.id).catch(() => null);
-    const userData = levels.getUserData(interaction.guild.id, target.id);
-
-    if (!userData) {
-      return interaction.editReply({ content: `${target.id === interaction.user.id ? '¡Todavía no tienes' : `${target.username} no tiene`} XP registrado! Sigue escribiendo en los canales para subir de nivel. 🚀` });
-    }
+    const userData = await levels.getUserData(interaction.guild.id, target.id);
 
     try {
       const image = await createLevelUpCard({
@@ -560,11 +556,11 @@ client.on('interactionCreate', async interaction => {
         avatarUrl      : target.displayAvatarURL({ extension: 'png', size: 512 }),
         guildName      : interaction.guild.name,
         memberCount    : interaction.guild.memberCount,
-        level          : userData.level,
-        currentXp      : userData.currentXp,
-        neededXp       : userData.neededXp,
-        totalMessages  : userData.messages || 0,
-        joinedTimestamp: member?.joinedTimestamp || userData.joinedTimestamp,
+        level          : userData?.level          ?? 0,
+        currentXp      : userData?.currentXp      ?? 0,
+        neededXp       : userData?.neededXp       ?? 100,
+        totalMessages  : userData?.messages        ?? 0,
+        joinedTimestamp: member?.joinedTimestamp   || userData?.joinedTimestamp || null,
       });
       return interaction.editReply({ files: [new AttachmentBuilder(image, { name: 'nivel.png' })] });
     } catch (err) {
@@ -576,7 +572,7 @@ client.on('interactionCreate', async interaction => {
   // ── /ranking ───────────────────────────────────────────────────────────────
   if (interaction.commandName === 'ranking') {
     await interaction.deferReply();
-    const top = levels.getLeaderboard(interaction.guild.id, 10);
+    const top = await levels.getLeaderboard(interaction.guild.id, 10);
     if (!top.length) return interaction.editReply({ content: '📊 Aún no hay datos de niveles en este servidor.' });
 
     const lines = top.map((u, i) => {
