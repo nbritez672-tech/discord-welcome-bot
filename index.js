@@ -251,16 +251,31 @@ function extractDomain(url) {
   }
 }
 
+// Extrae el código de invitación de una URL tipo discord.gg/xxxx o discord.com/invite/xxxx
+function extractInviteCode(url) {
+  const match = url.match(/discord(?:\.gg|app\.com\/invite|\.com\/invite)\/([a-z0-9-]+)/i);
+  return match ? match[1].toLowerCase() : null;
+}
+
 // Revisa un mensaje y determina si contiene un link no permitido.
+// Las invitaciones de Discord se comparan por código contra la whitelist:
+// si el código coincide con una entrada permitida (ej: discord.gg/katgyysjp
+// guardado con /editar-links), se permite; cualquier otro código se bloquea siempre.
 // Devuelve el link ofensivo (string) o null si el mensaje no infringe nada.
 function findDisallowedLink(content, allowedDomains) {
   const matches = content.match(URL_REGEX);
   if (!matches) return null;
 
+  // Códigos de invitación ya autorizados dentro de la whitelist
+  const allowedInviteCodes = allowedDomains
+    .map(d => extractInviteCode(d))
+    .filter(Boolean);
+
   for (const raw of matches) {
-    // Cualquier invitación a otro servidor de Discord siempre está prohibida
     if (DISCORD_INVITE_REGEX.test(raw)) {
-      return raw;
+      const code = extractInviteCode(raw);
+      if (code && allowedInviteCodes.includes(code)) continue; // invitación permitida
+      return raw; // invitación a otro servidor -> siempre bloqueada
     }
     const domain = extractDomain(raw);
     if (!domain) {
@@ -354,7 +369,7 @@ function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
 
 // Aplica una advertencia al usuario: borra el mensaje, manda la imagen de aviso,
 // y si ya es la 2da infracción, lo expulsa del servidor.
-async function applyModerationStrike(message, reasonText) {
+async function applyModerationStrike(message, reasonText, extraMessagesToDelete = []) {
   const warnings = loadWarnings();
   const guildId  = message.guild.id;
   const userId   = message.author.id;
@@ -364,8 +379,16 @@ async function applyModerationStrike(message, reasonText) {
   warnings[guildId][userId] = current;
   saveWarnings(warnings);
 
-  // Borrar el mensaje infractor (puede fallar si ya no existe)
-  await message.delete().catch(() => {});
+  // Borrar el mensaje infractor y, si aplica (caso spam), todos los demás
+  // mensajes de la persona dentro de la ventana detectada. Se deduplica por
+  // id para no intentar borrar el mismo mensaje dos veces.
+  const toDelete = [message, ...extraMessagesToDelete];
+  const seenIds  = new Set();
+  for (const m of toDelete) {
+    if (seenIds.has(m.id)) continue;
+    seenIds.add(m.id);
+    await m.delete().catch(() => {});
+  }
 
   // Generar y enviar la imagen de aviso en el mismo canal
   try {
@@ -393,22 +416,32 @@ async function applyModerationStrike(message, reasonText) {
 }
 
 // ── Detección de spam por mensajes repetidos ────────────────────────────────
-// Guarda por usuario los últimos mensajes con su timestamp para detectar 3 iguales en 10s
-const recentMessages = new Map(); // userId -> [{ content, ts }]
+// Guarda por usuario los últimos mensajes (objeto completo) para poder borrarlos
+// todos si se detecta spam: 3 mensajes idénticos en 10s dispara la limpieza de
+// TODOS los mensajes de esa persona dentro de esa ventana, sean iguales o no.
+const recentMessages = new Map(); // userId -> [{ message, ts }]
 const SPAM_WINDOW_MS   = 10000;
 const SPAM_REPEAT_COUNT = 3;
 
+// Devuelve la lista de mensajes a borrar (todos los de la ventana) si se detectó
+// spam, o null si el mensaje actual no dispara ninguna detección.
 function registerMessageForSpamCheck(message) {
   const userId = message.author.id;
   const now = Date.now();
   const history = recentMessages.get(userId) || [];
 
   const updated = history.filter(m => now - m.ts < SPAM_WINDOW_MS);
-  updated.push({ content: message.content, ts: now });
+  updated.push({ message, ts: now });
   recentMessages.set(userId, updated);
 
-  const sameCount = updated.filter(m => m.content === message.content).length;
-  return sameCount >= SPAM_REPEAT_COUNT;
+  const sameCount = updated.filter(m => m.message.content === message.content).length;
+  if (sameCount >= SPAM_REPEAT_COUNT) {
+    // Se detectó spam -> limpiar el historial de este usuario para no re-disparar
+    // sobre los mismos mensajes en el próximo mensaje que mande
+    recentMessages.delete(userId);
+    return updated.map(m => m.message);
+  }
+  return null;
 }
 
 
@@ -695,6 +728,11 @@ client.on('messageCreate', async message => {
     if (message.author.bot) return;
     if (!message.guild) return;
 
+    // Los administradores del servidor quedan exentos de la moderación
+    if (message.member?.permissions.has(PermissionFlagsBits.Administrator)) {
+      // sigue de largo hacia el resto del handler (ej: !welcome) sin pasar por los filtros
+    } else {
+
     // ── Moderación: link no permitido ──────────────────────
     const allowedDomains = loadAllowedLinks();
     const badLink = findDisallowedLink(message.content, allowedDomains);
@@ -708,15 +746,17 @@ client.on('messageCreate', async message => {
 
     // ── Moderación: mensajes repetidos (spam) ──────────────
     if (message.content.trim().length > 0) {
-      const isSpam = registerMessageForSpamCheck(message);
-      if (isSpam) {
+      const spamMessages = registerMessageForSpamCheck(message);
+      if (spamMessages) {
         await applyModerationStrike(
           message,
-          'Sending repeated messages (spam) is not allowed.'
+          'Sending repeated messages (spam) is not allowed.',
+          spamMessages
         );
         return;
       }
-    }
+    } // cierra: if (message.content.trim().length > 0) del check de spam
+    } // cierra: else (administradores exentos de moderación)
 
     if (message.content.toLowerCase() === '!welcome') {
       const image = await createWelcomeImage(
