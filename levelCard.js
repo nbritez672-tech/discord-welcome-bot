@@ -78,16 +78,16 @@ async function createLevelUpCard(opts) {
   await ensureFont();
 
   const {
-    username,
+    username       = 'Usuario',
     avatarUrl,
-    guildName,
-    memberCount,
-    level,
-    currentXp,
-    neededXp,
-    totalMessages = 0,
-    joinedTimestamp,
-  } = opts;
+    guildName      = 'Servidor',
+    memberCount    = 0,
+    level          = 0,
+    currentXp      = 0,
+    neededXp       = 100,
+    totalMessages  = 0,
+    joinedTimestamp = null,
+  } = opts || {};
 
   const W = 900;
   const H = 290;
