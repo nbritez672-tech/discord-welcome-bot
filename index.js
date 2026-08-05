@@ -633,19 +633,19 @@ client.on('messageCreate', async message => {
 
       // XP extra si es reporte de bug
       if (BUGS_CHANNEL_ID && message.channel.id === BUGS_CHANNEL_ID) {
-        const result = levels.registerBugReport(message.guild.id, message.author.id, message.author.username, joinedTs);
+        const result = await levels.registerBugReport(message.guild.id, message.author.id, message.author.username, joinedTs);
         await handleXpResult(result, message.guild, message.member);
         // También da XP de mensaje normal
       }
 
       // XP extra si es sugerencia
       if (SUGGEST_CHANNEL_ID && message.channel.id === SUGGEST_CHANNEL_ID) {
-        const result = levels.registerSuggestion(message.guild.id, message.author.id, message.author.username, joinedTs);
+        const result = await levels.registerSuggestion(message.guild.id, message.author.id, message.author.username, joinedTs);
         await handleXpResult(result, message.guild, message.member);
       }
 
       // XP de mensaje (con cooldown 30s)
-      const result = levels.registerMessage(message.guild.id, message.author.id, message.author.username, joinedTs);
+      const result = await levels.registerMessage(message.guild.id, message.author.id, message.author.username, joinedTs);
       await handleXpResult(result, message.guild, message.member);
 
       // Actualizar presencia activa
