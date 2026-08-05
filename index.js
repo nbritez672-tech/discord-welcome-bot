@@ -73,7 +73,7 @@ async function sendLevelUp(guild, member, userData) {
       username       : member.user.username,
       avatarUrl      : member.user.displayAvatarURL({ extension: 'png', size: 512 }),
       guildName      : guild.name,
-      memberCount    : guild.memberCount,
+      memberCount    : userData.memberNumber || guild.memberCount,
       level          : userData.level,
       currentXp      : userData.currentXp,
       neededXp       : userData.neededXp,
@@ -555,7 +555,7 @@ client.on('interactionCreate', async interaction => {
         username       : target.username,
         avatarUrl      : target.displayAvatarURL({ extension: 'png', size: 512 }),
         guildName      : interaction.guild.name,
-        memberCount    : interaction.guild.memberCount,
+        memberCount    : userData?.memberNumber || interaction.guild.memberCount,
         level          : userData?.level          ?? 0,
         currentXp      : userData?.currentXp      ?? 0,
         neededXp       : userData?.neededXp       ?? 100,
@@ -589,6 +589,9 @@ client.on('interactionCreate', async interaction => {
 // ── Bienvenida ───────────────────────────────────────────────────────────────
 client.on('guildMemberAdd', async (member) => {
   try {
+    // Guardar el número de miembro al entrar (posición real)
+    await levels.setMemberNumber(member.guild.id, member.id, member.guild.memberCount);
+
     const channel = await member.guild.channels.fetch(WELCOME_CHANNEL_ID);
     if (!channel?.isTextBased()) return;
     const image = await createWelcomeImage(member);
