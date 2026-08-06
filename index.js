@@ -24,6 +24,9 @@ const path = require('path');
 const levels      = require('./levels');
 const { createLevelUpCard } = require('./levelCard');
 
+// ── Comando /tema ────────────────────────────────────────────────────────────
+const { temaCommand, handleTemaCommand } = require('./themeCommand');
+
 // ── Fuentes ──────────────────────────────────────────────────────────────────
 async function loadFonts() {
   const fontUrl  = 'https://fonts.gstatic.com/s/inter/v13/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfAZ9hiA.woff2';
@@ -475,6 +478,7 @@ client.once('ready', async () => {
         editLinksCommand.toJSON(),
         nivelCommand.toJSON(),
         rankingCommand.toJSON(),
+        temaCommand.toJSON(),
       ]
     });
     console.log('✅ Comandos slash registrados');
@@ -567,6 +571,11 @@ client.on('interactionCreate', async interaction => {
       console.error('Error generando card /nivel:', err);
       return interaction.editReply({ content: '❌ Error generando la tarjeta de nivel.' });
     }
+  }
+
+  // ── /tema ──────────────────────────────────────────────────────────────────
+  if (interaction.commandName === 'tema') {
+    return handleTemaCommand(interaction);
   }
 
   // ── /ranking ───────────────────────────────────────────────────────────────
