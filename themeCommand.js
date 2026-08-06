@@ -193,32 +193,56 @@ function buildPaletteAssignment(colors) {
 /**
  * Sube una imagen a Roblox Open Cloud y retorna el assetId numérico.
  * Usa la API de Assets v1: POST /assets/v1/assets (multipart/form-data)
+ * Construimos el body multipart manualmente con Buffer para maxima compatibilidad.
  *
  * Docs: https://create.roblox.com/docs/cloud/reference/Assets
  */
 async function uploadImageToRoblox(imageBuffer, mimeType, themeName) {
-  const FormData = (await import('node:stream')).Writable; // usamos fetch nativo de Node 22
+  const boundary = `----RobloxBoundary${Date.now()}`;
 
-  // Construir multipart/form-data manualmente (Node 22 tiene FormData global)
-  const form = new globalThis.FormData();
-
-  // Metadata del asset en JSON
   const metadata = JSON.stringify({
     assetType   : 'Image',
     displayName : `YinYang Theme: ${themeName}`,
     description : `Tema ${themeName} para Yin Yang UI Library`,
     creationContext: {
-      creator: { userId: null }, // null → usa el creador del API key
+      creator: {},
     }
   });
 
-  form.append('request', new Blob([metadata], { type: 'application/json' }));
-  form.append('fileContent', new Blob([imageBuffer], { type: mimeType }), `${themeName}.png`);
+  // Construir el body multipart manualmente como Buffer
+  const CRLF = '\r\n';
+  const parts = [];
+
+  // Parte 1: metadata JSON
+  parts.push(Buffer.from(
+    `--${boundary}${CRLF}` +
+    `Content-Disposition: form-data; name="request"${CRLF}` +
+    `Content-Type: application/json${CRLF}${CRLF}` +
+    metadata + CRLF
+  ));
+
+  // Parte 2: archivo de imagen
+  parts.push(Buffer.from(
+    `--${boundary}${CRLF}` +
+    `Content-Disposition: form-data; name="fileContent"; filename="${themeName}.png"${CRLF}` +
+    `Content-Type: ${mimeType}${CRLF}${CRLF}`
+  ));
+  parts.push(imageBuffer);
+  parts.push(Buffer.from(CRLF));
+
+  // Cierre
+  parts.push(Buffer.from(`--${boundary}--${CRLF}`));
+
+  const body = Buffer.concat(parts);
 
   const res = await fetch('https://apis.roblox.com/assets/v1/assets', {
     method : 'POST',
-    headers: { 'x-api-key': ROBLOX_API_KEY },
-    body   : form,
+    headers: {
+      'x-api-key'    : ROBLOX_API_KEY,
+      'Content-Type' : `multipart/form-data; boundary=${boundary}`,
+      'Content-Length': String(body.length),
+    },
+    body,
   });
 
   if (!res.ok) {
@@ -434,7 +458,7 @@ async function handleTemaCommand(interaction) {
   if (!hasPermission) {
     return interaction.reply({
       content : '❌ Solo los roles **Owner** y **Admin** pueden usar este comando.',
-      ephemeral: true,
+      flags: 64,
     });
   }
 
@@ -446,7 +470,7 @@ async function handleTemaCommand(interaction) {
   if (!/^[a-zA-Z0-9]+$/.test(themeName)) {
     return interaction.reply({
       content : '❌ El nombre del tema solo puede contener letras y números, sin espacios ni caracteres especiales.',
-      ephemeral: true,
+      flags: 64,
     });
   }
 
@@ -454,7 +478,7 @@ async function handleTemaCommand(interaction) {
   if (!attachment.contentType?.startsWith('image/')) {
     return interaction.reply({
       content : '❌ El archivo adjunto debe ser una imagen (PNG, JPG, WebP).',
-      ephemeral: true,
+      flags: 64,
     });
   }
 
