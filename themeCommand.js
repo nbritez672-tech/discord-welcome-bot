@@ -205,7 +205,10 @@ async function uploadImageToRoblox(imageBuffer, mimeType, themeName) {
     displayName : `YinYang Theme: ${themeName}`,
     description : `Tema ${themeName} para Yin Yang UI Library`,
     creationContext: {
-      creator: { creatorType: "USER" },
+      creator: {
+        creatorType: "User",
+        creatorId: "9562532102",
+      },
     }
   });
 
