@@ -29,6 +29,7 @@ const { temaCommand, handleTemaCommand } = require('./themeCommand');
 
 // ── Fuentes ──────────────────────────────────────────────────────────────────
 async function loadFonts() {
+  // ── Inter (UI pequeño) ────────────────────────────────────────────────────
   const fontUrl  = 'https://fonts.gstatic.com/s/inter/v13/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfAZ9hiA.woff2';
   const fontPath = path.join(os.tmpdir(), 'Inter-Bold.woff2');
   if (!fs.existsSync(fontPath)) {
@@ -38,6 +39,17 @@ async function loadFonts() {
   }
   GlobalFonts.registerFromPath(fontPath, 'Inter');
   console.log('✅ Fuente Inter registrada');
+
+  // ── Bebas Neue (display — welcome card) ───────────────────────────────────
+  const bebasUrl  = 'https://fonts.gstatic.com/s/bebasneue/v21/JTUSjIg69CK48gW7PXoo9WdhyyTh89ZNpQ.woff2';
+  const bebasPath = path.join(os.tmpdir(), 'BebasNeue.woff2');
+  if (!fs.existsSync(bebasPath)) {
+    const res2 = await fetch(bebasUrl);
+    const buf2 = Buffer.from(await res2.arrayBuffer());
+    fs.writeFileSync(bebasPath, buf2);
+  }
+  GlobalFonts.registerFromPath(bebasPath, 'BebasNeue');
+  console.log('✅ Fuente BebasNeue registrada');
 }
 
 // ── Variables de entorno ─────────────────────────────────────────────────────
@@ -133,19 +145,25 @@ async function createWelcomeImage(member) {
   const ctx = canvas.getContext('2d');
 
   const bgGrad = ctx.createLinearGradient(0, 0, W, H);
-  bgGrad.addColorStop(0,   '#1a1c2e');
-  bgGrad.addColorStop(0.5, '#1e2235');
-  bgGrad.addColorStop(1,   '#16182a');
+  bgGrad.addColorStop(0,   '#080808');
+  bgGrad.addColorStop(0.5, '#0f0f0f');
+  bgGrad.addColorStop(1,   '#060606');
   ctx.fillStyle = bgGrad;
   ctx.fillRect(0, 0, W, H);
 
-  const borderGrad = ctx.createLinearGradient(0, 0, W, 0);
-  borderGrad.addColorStop(0,   '#ff6ec7');
-  borderGrad.addColorStop(0.5, '#a78bfa');
-  borderGrad.addColorStop(1,   '#60a5fa');
-  ctx.fillStyle = borderGrad;
+  // Borde superior: blanco (Yang)
+  const borderTop = ctx.createLinearGradient(0, 0, W, 0);
+  borderTop.addColorStop(0,   '#d4d4d4');
+  borderTop.addColorStop(0.5, '#ffffff');
+  borderTop.addColorStop(1,   '#d4d4d4');
+  ctx.fillStyle = borderTop;
   ctx.fillRect(0, 0, W, 3);
-  ctx.fillStyle = borderGrad;
+  // Borde inferior: carmesí (Yin)
+  const borderBot = ctx.createLinearGradient(0, 0, W, 0);
+  borderBot.addColorStop(0,   '#7f1d1d');
+  borderBot.addColorStop(0.5, '#dc2626');
+  borderBot.addColorStop(1,   '#7f1d1d');
+  ctx.fillStyle = borderBot;
   ctx.fillRect(0, H - 3, W, 3);
 
   const avatarSize = 140;
@@ -156,8 +174,8 @@ async function createWelcomeImage(member) {
     avatarX - avatarSize / 2, avatarY - avatarSize / 2,
     avatarX + avatarSize / 2, avatarY + avatarSize / 2
   );
-  ringGrad.addColorStop(0, '#ff6ec7');
-  ringGrad.addColorStop(1, '#60a5fa');
+  ringGrad.addColorStop(0, '#ffffff');
+  ringGrad.addColorStop(1, '#9ca3af');
   ctx.beginPath();
   ctx.arc(avatarX, avatarY, avatarSize / 2 + 5, 0, Math.PI * 2);
   ctx.lineWidth = 4;
@@ -177,32 +195,41 @@ async function createWelcomeImage(member) {
 
   const divX    = 80 + avatarSize + 40;
   const divGrad = ctx.createLinearGradient(0, 40, 0, H - 40);
-  divGrad.addColorStop(0,   'rgba(167,139,250,0)');
-  divGrad.addColorStop(0.3, 'rgba(167,139,250,0.8)');
-  divGrad.addColorStop(0.7, 'rgba(167,139,250,0.8)');
-  divGrad.addColorStop(1,   'rgba(167,139,250,0)');
+  divGrad.addColorStop(0,   'rgba(255,255,255,0)');
+  divGrad.addColorStop(0.3, 'rgba(255,255,255,0.6)');
+  divGrad.addColorStop(0.7, 'rgba(255,255,255,0.6)');
+  divGrad.addColorStop(1,   'rgba(255,255,255,0)');
   ctx.fillStyle = divGrad;
   ctx.fillRect(divX, 40, 2, H - 80);
 
   const textX = divX + 36;
   ctx.textBaseline = 'middle';
-  ctx.shadowColor  = 'rgba(0,0,0,0.8)';
-  ctx.shadowBlur   = 10;
+  ctx.shadowColor  = 'rgba(0,0,0,0.9)';
+  ctx.shadowBlur   = 12;
 
+  // Tag "✦ WELCOME A YIN YANG ✦" — carmesí → blanco
   ctx.textAlign = 'left';
-  ctx.font      = 'bold 13px "Inter"';
-  const tagGrad = ctx.createLinearGradient(textX, 0, textX + 340, 0);
-  tagGrad.addColorStop(0, '#ff6ec7');
-  tagGrad.addColorStop(1, '#60a5fa');
+  ctx.font      = '15px "BebasNeue"';
+  const tagGrad = ctx.createLinearGradient(textX, 0, textX + 380, 0);
+  tagGrad.addColorStop(0,   '#dc2626');
+  tagGrad.addColorStop(0.5, '#ffffff');
+  tagGrad.addColorStop(1,   '#dc2626');
   ctx.fillStyle = tagGrad;
-  ctx.fillText('✦  ¡BIENVENIDO/A AL SERVIDOR!  ✦', textX, 88);
+  ctx.fillText('✦  WELCOME A YIN YANG  ✦', textX, 88);
 
-  ctx.font      = 'bold 52px "Inter"';
-  ctx.fillStyle = '#FFFFFF';
-  ctx.fillText(member.user.username, textX, 148);
+  // Nombre de usuario — Bebas Neue grande, blanco puro
+  ctx.font      = '62px "BebasNeue"';
+  ctx.fillStyle = '#ffffff';
+  let displayName = member.user.username;
+  while (ctx.measureText(displayName).width > W - textX - 30 && displayName.length > 4) {
+    displayName = displayName.slice(0, -1);
+  }
+  if (displayName !== member.user.username) displayName += '…';
+  ctx.fillText(displayName, textX, 148);
 
-  ctx.font      = '22px "Inter"';
-  ctx.fillStyle = '#8b9dc3';
+  // "en Yin Yang | Script Hub" — gris plata
+  ctx.font      = '22px "BebasNeue"';
+  ctx.fillStyle = '#9ca3af';
   ctx.fillText(`en ${member.guild.name}`, textX, 196);
 
   const badgeX = textX;
@@ -220,8 +247,8 @@ async function createWelcomeImage(member) {
   roundRect(ctx, badgeX, badgeY - badgeH / 2, badgeW, badgeH, 6);
   ctx.stroke();
 
-  ctx.font      = 'bold 13px "Inter"';
-  ctx.fillStyle = '#c0cde8';
+  ctx.font      = '16px "BebasNeue"';
+  ctx.fillStyle = '#e5e5e5';
   ctx.textAlign = 'left';
   ctx.fillText(`MIEMBRO  #${member.guild.memberCount}`, badgeX + 10, badgeY);
 
@@ -605,7 +632,7 @@ client.on('guildMemberAdd', async (member) => {
     if (!channel?.isTextBased()) return;
     const image = await createWelcomeImage(member);
     await channel.send({
-      content: `👋 Bienvenido ${member}`,
+      content: `✦ ***Welcome a Yin Yang | Script Hub*** ✦ ${member}\n> 👤 Eres el miembro **#${member.guild.memberCount}** de nuestro servidor\n> 📜 Leé las reglas y bienvenido/a a la comunidad`,
       files  : [new AttachmentBuilder(image, { name: 'welcome.png' })],
     });
   } catch (err) {
