@@ -828,7 +828,7 @@ const editLinksCommand = new SlashCommandBuilder()
 // ═══════════════════════════════════════════════════════════════════════════════
 
 client.once('ready', async () => {
-  console.log(`✅ Bot listo como ${client.user.tag}`);
+  console.log(`✅ Bot listo como ${client.user.tag} — [${INSTANCE_ID}] PID ${process.pid}, ws.status=${client.ws.status}, ping=${client.ws.ping}ms`);
 
   const rest = new REST({ version: '10' }).setToken(TOKEN);
   try {
