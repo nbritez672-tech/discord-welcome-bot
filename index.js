@@ -93,6 +93,47 @@ async function deduplicateOwnMention(channel, userId) {
   }
 }
 
+// ── Bienvenida idempotente ────────────────────────────────────────────────────
+// El Set local cubre un único proceso. Estas comprobaciones adicionales cubren
+// carreras entre procesos y reentregas del gateway.
+const WELCOME_DEDUPE_WINDOW_MS = 30000;
+function isOwnWelcomeMessage(message, userId, now = Date.now()) {
+  return message.author.id === client.user.id &&
+    message.content.includes(`<@${userId}>`) &&
+    message.content.includes('Welcome a Yin Yang') &&
+    now - message.createdTimestamp <= WELCOME_DEDUPE_WINDOW_MS;
+}
+
+async function recentWelcomeExists(channel, userId) {
+  try {
+    const recent = await channel.messages.fetch({ limit: 50 });
+    return recent.some(message => isOwnWelcomeMessage(message, userId));
+  } catch (err) {
+    console.error('Error comprobando bienvenida reciente:', err);
+    return false;
+  }
+}
+
+async function cleanupWelcomeDuplicates(channel, userId) {
+  try {
+    const recent = await channel.messages.fetch({ limit: 50 });
+    const now = Date.now();
+    const welcomes = recent
+      .filter(message => isOwnWelcomeMessage(message, userId, now))
+      .sort((a, b) => a.createdTimestamp - b.createdTimestamp);
+    for (const duplicate of welcomes.slice(1)) {
+      await duplicate.delete().catch(err => {
+        console.error(`No se pudo borrar bienvenida duplicada ${duplicate.id}:`, err);
+      });
+    }
+    if (welcomes.length > 1) {
+      console.warn(`⚠️ [${INSTANCE_ID}] se limpiaron ${welcomes.length - 1} bienvenidas duplicadas para ${userId}`);
+    }
+  } catch (err) {
+    console.error('Error limpiando bienvenidas duplicadas:', err);
+  }
+}
+
 // ── ID de instancia — ayuda a detectar si hay 2 procesos corriendo a la vez ──
 const INSTANCE_ID = Math.random().toString(36).slice(2, 8);
 console.log(`🔖 Instancia iniciada: ${INSTANCE_ID} (PID ${process.pid})`);
@@ -882,11 +923,17 @@ client.on('guildMemberAdd', async (member) => {
   try {
     const channel = await member.guild.channels.fetch(WELCOME_CHANNEL_ID);
     if (!channel?.isTextBased()) return;
+    if (await recentWelcomeExists(channel, member.id)) {
+      console.warn(`⚠️ [${INSTANCE_ID}] bienvenida reciente ya existe — miembro ${member.id}`);
+      return;
+    }
     const image = await createWelcomeImage(member);
-    await channel.send({
+    const sent = await channel.send({
       content: `✦ ***Welcome a Yin Yang | Script Hub*** ✦ ${member}\n> 👤 Eres el miembro **#${member.guild.memberCount}** de nuestro servidor\n> 📜 Leé las reglas y bienvenido/a a la comunidad`,
       files  : [new AttachmentBuilder(image, { name: 'welcome.png' })],
     });
+    console.log(`✅ [${INSTANCE_ID}] bienvenida enviada — miembro ${member.id}, mensaje ${sent.id}`);
+    await cleanupWelcomeDuplicates(channel, member.id);
   } catch (err) {
     console.error('Error en bienvenida:', err);
   }
