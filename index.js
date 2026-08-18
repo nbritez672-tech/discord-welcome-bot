@@ -727,6 +727,17 @@ client.on('messageReactionAdd', async (reaction, user) => {
   }
 });
 
+// ── Apagado limpio ───────────────────────────────────────────────────────────
+// Railway manda SIGTERM al contenedor viejo cuando hace un redeploy.
+// Sin esto, el proceso puede quedar colgado unos segundos todavía conectado
+// al gateway de Discord mientras el proceso nuevo ya arrancó — generando una
+// ventana donde ambos responden a los mismos eventos (bienvenidas/avisos duplicados).
+process.on('SIGTERM', () => {
+  console.log('🛑 SIGTERM recibido — cerrando conexión con Discord...');
+  client.destroy();
+  process.exit(0);
+});
+
 // ── Arranque ──────────────────────────────────────────────────────────────────
 loadFonts().then(() => {
   client.login(TOKEN);
