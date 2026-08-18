@@ -118,8 +118,9 @@ async function cleanupWelcomeDuplicates(channel, userId) {
   try {
     const recent = await channel.messages.fetch({ limit: 50 });
     const now = Date.now();
-    const welcomes = recent
+    const welcomes = [...recent
       .filter(message => isOwnWelcomeMessage(message, userId, now))
+      .values()]
       .sort((a, b) => a.createdTimestamp - b.createdTimestamp);
     for (const duplicate of welcomes.slice(1)) {
       await duplicate.delete().catch(err => {
