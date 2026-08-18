@@ -20,13 +20,6 @@ const os   = require('os');
 const fs   = require('fs');
 const path = require('path');
 
-// ── Sistema de niveles ───────────────────────────────────────────────────────
-const levels      = require('./levels');
-const { createLevelUpCard } = require('./levelCard');
-
-// ── Comando /tema ────────────────────────────────────────────────────────────
-const { temaCommand, handleTemaCommand } = require('./themeCommand');
-
 // ── Fuentes ──────────────────────────────────────────────────────────────────
 async function loadFonts() {
   // ── Inter (UI pequeño) ────────────────────────────────────────────────────
@@ -56,14 +49,10 @@ async function loadFonts() {
 const TOKEN              = process.env.TOKEN;
 const CLIENT_ID          = process.env.CLIENT_ID;
 const WELCOME_CHANNEL_ID = process.env.WELCOME_CHANNEL_ID;
-const LEVELUP_CHANNEL_ID = process.env.LEVELUP_CHANNEL_ID; // Canal #level-up
-const BUGS_CHANNEL_ID    = process.env.BUGS_CHANNEL_ID;    // Canal #bugs
-const SUGGEST_CHANNEL_ID = process.env.SUGGEST_CHANNEL_ID; // Canal #sugerencias
 
 if (!TOKEN)              { console.error('Falta TOKEN.');              process.exit(1); }
 if (!CLIENT_ID)          { console.error('Falta CLIENT_ID.');          process.exit(1); }
 if (!WELCOME_CHANNEL_ID) { console.error('Falta WELCOME_CHANNEL_ID.'); process.exit(1); }
-if (!LEVELUP_CHANNEL_ID) { console.error('Falta LEVELUP_CHANNEL_ID.'); process.exit(1); }
 
 // ── Guard anti-duplicados ───────────────────────────────────────────────────
 // Si por cualquier motivo (dos procesos vivos, reconexión del gateway, etc.)
@@ -89,46 +78,8 @@ const client = new Client({
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
-    GatewayIntentBits.GuildMessageReactions,
   ]
 });
-
-// ── Helper: enviar level-up card al canal ───────────────────────────────────
-async function sendLevelUp(guild, member, userData) {
-  try {
-    const channel = LEVELUP_CHANNEL_ID
-      ? await guild.channels.fetch(LEVELUP_CHANNEL_ID).catch(() => null)
-      : null;
-    if (!channel?.isTextBased()) return;
-
-    const image = await createLevelUpCard({
-      username       : member.user.username,
-      avatarUrl      : member.user.displayAvatarURL({ extension: 'png', size: 512 }),
-      guildName      : guild.name,
-      memberCount    : userData.memberNumber || guild.memberCount,
-      level          : userData.level,
-      currentXp      : userData.currentXp,
-      neededXp       : userData.neededXp,
-      totalMessages  : userData.messages || 0,
-      joinedTimestamp: userData.joinedTimestamp,
-    });
-
-    await channel.send({
-      content: `You leveled up ${member}`,
-      files  : [new AttachmentBuilder(image, { name: 'levelup.png' })],
-    });
-  } catch (err) {
-    console.error('Error enviando level-up card:', err);
-  }
-}
-
-// ── Helper: procesar resultado de XP y disparar level-up si aplica ──────────
-async function handleXpResult(result, guild, member) {
-  if (!result) return;
-  if (result.leveledUp) {
-    await sendLevelUp(guild, member, result.userData);
-  }
-}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  FUNCIONES ORIGINALES (bienvenida, moderación, etc.)
@@ -516,21 +467,6 @@ const editLinksCommand = new SlashCommandBuilder()
   )
   .addStringOption(opt => opt.setName('dominio').setDescription('Dominio a agregar o quitar (ej: youtube.com)').setRequired(true));
 
-// ── /nivel — ver nivel propio ────────────────────────────────────────────────
-const nivelCommand = new SlashCommandBuilder()
-  .setName('nivel')
-  .setDescription('Muestra tu nivel actual, XP y estadísticas')
-  .addUserOption(opt =>
-    opt.setName('usuario')
-      .setDescription('Ver el nivel de otro miembro (opcional)')
-      .setRequired(false)
-  );
-
-// ── /ranking — top 10 del servidor ──────────────────────────────────────────
-const rankingCommand = new SlashCommandBuilder()
-  .setName('ranking')
-  .setDescription('Muestra el top 10 de miembros más activos del servidor');
-
 // ═══════════════════════════════════════════════════════════════════════════════
 //  EVENTOS
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -546,9 +482,6 @@ client.once('ready', async () => {
         deleteCommand.toJSON(),
         listLinksCommand.toJSON(),
         editLinksCommand.toJSON(),
-        nivelCommand.toJSON(),
-        rankingCommand.toJSON(),
-        temaCommand.toJSON(),
       ]
     });
     console.log('✅ Comandos slash registrados');
@@ -623,53 +556,6 @@ client.on('interactionCreate', async interaction => {
     }
   }
 
-  // ── /nivel ─────────────────────────────────────────────────────────────────
-  if (interaction.commandName === 'nivel') {
-    await interaction.deferReply({ ephemeral: false });
-
-    const target  = interaction.options.getUser('usuario') || interaction.user;
-    const member  = await interaction.guild.members.fetch(target.id).catch(() => null);
-    const userData = await levels.getUserData(interaction.guild.id, target.id);
-
-    try {
-      const image = await createLevelUpCard({
-        username       : target.username,
-        avatarUrl      : target.displayAvatarURL({ extension: 'png', size: 512 }),
-        guildName      : interaction.guild.name,
-        memberCount    : userData?.memberNumber || interaction.guild.memberCount,
-        level          : userData?.level          ?? 0,
-        currentXp      : userData?.currentXp      ?? 0,
-        neededXp       : userData?.neededXp       ?? 100,
-        totalMessages  : userData?.messages        ?? 0,
-        joinedTimestamp: member?.joinedTimestamp   || userData?.joinedTimestamp || null,
-      });
-      return interaction.editReply({ files: [new AttachmentBuilder(image, { name: 'nivel.png' })] });
-    } catch (err) {
-      console.error('Error generando card /nivel:', err);
-      return interaction.editReply({ content: '❌ Error generando la tarjeta de nivel.' });
-    }
-  }
-
-  // ── /tema ──────────────────────────────────────────────────────────────────
-  if (interaction.commandName === 'tema') {
-    return handleTemaCommand(interaction);
-  }
-
-  // ── /ranking ───────────────────────────────────────────────────────────────
-  if (interaction.commandName === 'ranking') {
-    await interaction.deferReply();
-    const top = await levels.getLeaderboard(interaction.guild.id, 10);
-    if (!top.length) return interaction.editReply({ content: '📊 Aún no hay datos de niveles en este servidor.' });
-
-    const lines = top.map((u, i) => {
-      const medal = ['🥇','🥈','🥉'][i] ?? `**${i + 1}.**`;
-      return `${medal} **${u.username ?? `<@${u.userId}>`}** — Nivel ${u.level} • ${u.xp.toLocaleString()} XP • ${(u.messages || 0).toLocaleString()} mensajes`;
-    });
-
-    return interaction.editReply({
-      content: `🏆 **Top 10 — ${interaction.guild.name}**\n\n${lines.join('\n')}`,
-    });
-  }
 });
 
 // ── Bienvenida ───────────────────────────────────────────────────────────────
@@ -679,9 +565,6 @@ client.on('guildMemberAdd', async (member) => {
     return;
   }
   try {
-    // Guardar el número de miembro al entrar (posición real)
-    await levels.setMemberNumber(member.guild.id, member.id, member.guild.memberCount);
-
     const channel = await member.guild.channels.fetch(WELCOME_CHANNEL_ID);
     if (!channel?.isTextBased()) return;
     const image = await createWelcomeImage(member);
@@ -724,31 +607,6 @@ client.on('messageCreate', async message => {
       }
     }
 
-    // ── XP por mensaje ──────────────────────────────────────────────────────
-    if (message.content.trim().length > 0) {
-      const joinedTs = message.member?.joinedTimestamp ?? null;
-
-      // XP extra si es reporte de bug
-      if (BUGS_CHANNEL_ID && message.channel.id === BUGS_CHANNEL_ID) {
-        const result = await levels.registerBugReport(message.guild.id, message.author.id, message.author.username, joinedTs);
-        await handleXpResult(result, message.guild, message.member);
-        // También da XP de mensaje normal
-      }
-
-      // XP extra si es sugerencia
-      if (SUGGEST_CHANNEL_ID && message.channel.id === SUGGEST_CHANNEL_ID) {
-        const result = await levels.registerSuggestion(message.guild.id, message.author.id, message.author.username, joinedTs);
-        await handleXpResult(result, message.guild, message.member);
-      }
-
-      // XP de mensaje (con cooldown 30s)
-      const result = await levels.registerMessage(message.guild.id, message.author.id, message.author.username, joinedTs);
-      await handleXpResult(result, message.guild, message.member);
-
-      // Actualizar presencia activa
-      levels.touchPresence(message.guild.id, message.author.id, message.author.username, joinedTs);
-    }
-
     // ── Comando !welcome (preview) ──────────────────────────────────────────
     if (message.content.toLowerCase() === '!welcome') {
       const image = await createWelcomeImage(message.member);
@@ -757,31 +615,6 @@ client.on('messageCreate', async message => {
 
   } catch (err) {
     console.error('Error en messageCreate:', err);
-  }
-});
-
-// ── Reacciones ───────────────────────────────────────────────────────────────
-client.on('messageReactionAdd', async (reaction, user) => {
-  try {
-    if (user.bot) return;
-
-    // Si la reacción está parcial, completarla
-    if (reaction.partial) {
-      await reaction.fetch().catch(() => null);
-    }
-    if (!reaction.message.guild) return;
-
-    const member = await reaction.message.guild.members.fetch(user.id).catch(() => null);
-    if (!member) return;
-
-    const result = levels.registerReaction(
-      reaction.message.guild.id,
-      user.id,
-      user.username
-    );
-    await handleXpResult(result, reaction.message.guild, member);
-  } catch (err) {
-    console.error('Error en reacción:', err);
   }
 });
 
