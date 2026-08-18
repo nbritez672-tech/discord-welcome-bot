@@ -447,22 +447,43 @@ function findDisallowedLink(content, allowedDomains) {
 }
 
 async function createWarningImage(member, reasonText) {
-  const W = 860; const H = 220;
+  const W = 900; const H = 260;
   const canvas = createCanvas(W, H);
   const ctx    = canvas.getContext('2d');
 
-  const bgGrad = ctx.createLinearGradient(0, 0, W, H);
-  bgGrad.addColorStop(0, '#2e1a1a'); bgGrad.addColorStop(0.5, '#351e1e'); bgGrad.addColorStop(1, '#2a1616');
-  ctx.fillStyle = bgGrad; ctx.fillRect(0, 0, W, H);
+  // ── Fondo casi negro con leve gradiente radial rojo ─────────────────────────
+  const bgGrad = ctx.createRadialGradient(W * 0.15, H * 0.5, 0, W * 0.15, H * 0.5, W * 0.9);
+  bgGrad.addColorStop(0, '#1a0505');
+  bgGrad.addColorStop(1, '#0a0202');
+  ctx.fillStyle = bgGrad;
+  roundRect(ctx, 0, 0, W, H, 22);
+  ctx.fill();
 
-  const borderGrad = ctx.createLinearGradient(0, 0, W, 0);
-  borderGrad.addColorStop(0, '#ff4d4d'); borderGrad.addColorStop(1, '#ff8a5c');
-  ctx.fillStyle = borderGrad; ctx.fillRect(0, 0, W, 3); ctx.fillRect(0, H - 3, W, 3);
+  // ── Borde exterior con glow ──────────────────────────────────────────────────
+  ctx.save();
+  ctx.shadowColor = 'rgba(255,40,40,0.55)';
+  ctx.shadowBlur  = 18;
+  ctx.lineWidth   = 3;
+  ctx.strokeStyle = '#ff2d2d';
+  roundRect(ctx, 3, 3, W - 6, H - 6, 20);
+  ctx.stroke();
+  ctx.restore();
 
-  const avatarSize = 110; const avatarX = 80 + avatarSize / 2; const avatarY = H / 2;
+  // ── Borde interior fino ──────────────────────────────────────────────────────
+  ctx.lineWidth   = 1;
+  ctx.strokeStyle = 'rgba(255,90,90,0.5)';
+  roundRect(ctx, 10, 10, W - 20, H - 20, 16);
+  ctx.stroke();
 
-  ctx.beginPath(); ctx.arc(avatarX, avatarY, avatarSize / 2 + 5, 0, Math.PI * 2);
-  ctx.lineWidth = 4; ctx.strokeStyle = '#ff4d4d'; ctx.stroke();
+  const avatarSize = 130; const avatarX = 70 + avatarSize / 2; const avatarY = H / 2;
+
+  // ── Anillo del avatar con glow ────────────────────────────────────────────────
+  ctx.save();
+  ctx.shadowColor = 'rgba(255,45,45,0.6)';
+  ctx.shadowBlur  = 14;
+  ctx.beginPath(); ctx.arc(avatarX, avatarY, avatarSize / 2 + 6, 0, Math.PI * 2);
+  ctx.lineWidth = 5; ctx.strokeStyle = '#ff2d2d'; ctx.stroke();
+  ctx.restore();
 
   const avatarResponse = await fetch(member.user.displayAvatarURL({ extension: 'png', size: 512 }));
   const avatarBuffer   = Buffer.from(await avatarResponse.arrayBuffer());
@@ -473,12 +494,66 @@ async function createWarningImage(member, reasonText) {
   ctx.drawImage(avatar, avatarX - avatarSize / 2, avatarY - avatarSize / 2, avatarSize, avatarSize);
   ctx.restore();
 
-  const textX = 80 + avatarSize + 40;
-  ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
-  ctx.font = 'bold 30px "Inter"'; ctx.fillStyle = '#FFFFFF';
-  ctx.fillText(member.user.username, textX, 78);
-  ctx.font = 'bold 17px "Inter"'; ctx.fillStyle = '#ff4d4d';
-  wrapText(ctx, reasonText, textX, 118, W - textX - 40, 24);
+  // ── Insignia de advertencia solapada (esquina inferior derecha del avatar) ───
+  const badgeX = avatarX + avatarSize / 2 - 8;
+  const badgeY = avatarY + avatarSize / 2 - 8;
+  const badgeR = 22;
+  ctx.save();
+  ctx.shadowColor = 'rgba(255,45,45,0.7)';
+  ctx.shadowBlur  = 10;
+  ctx.beginPath();
+  ctx.moveTo(badgeX, badgeY - badgeR);
+  ctx.lineTo(badgeX + badgeR * 0.95, badgeY + badgeR * 0.8);
+  ctx.lineTo(badgeX - badgeR * 0.95, badgeY + badgeR * 0.8);
+  ctx.closePath();
+  ctx.fillStyle = '#0a0202';
+  ctx.fill();
+  ctx.lineWidth = 2.5; ctx.strokeStyle = '#ff2d2d'; ctx.stroke();
+  ctx.restore();
+  ctx.fillStyle = '#ff2d2d';
+  ctx.font = 'bold 20px "Inter"';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('!', badgeX, badgeY + 3);
+
+  const textX = 70 + avatarSize + 45;
+
+  // ── Escudo pequeño con "!" junto al nombre ────────────────────────────────────
+  const shieldCX = textX + 14; const shieldCY = 58; const shieldR = 16;
+  ctx.save();
+  ctx.shadowColor = 'rgba(255,45,45,0.6)';
+  ctx.shadowBlur  = 8;
+  ctx.beginPath();
+  ctx.moveTo(shieldCX, shieldCY - shieldR);
+  ctx.quadraticCurveTo(shieldCX + shieldR, shieldCY - shieldR * 0.6, shieldCX + shieldR, shieldCY - shieldR * 0.1);
+  ctx.quadraticCurveTo(shieldCX + shieldR, shieldCY + shieldR * 0.75, shieldCX, shieldCY + shieldR);
+  ctx.quadraticCurveTo(shieldCX - shieldR, shieldCY + shieldR * 0.75, shieldCX - shieldR, shieldCY - shieldR * 0.1);
+  ctx.quadraticCurveTo(shieldCX - shieldR, shieldCY - shieldR * 0.6, shieldCX, shieldCY - shieldR);
+  ctx.closePath();
+  ctx.fillStyle = '#ff2d2d';
+  ctx.fill();
+  ctx.restore();
+  ctx.fillStyle = '#0a0202';
+  ctx.font = 'bold 18px "Inter"';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('!', shieldCX, shieldCY + 1);
+
+  // ── Nombre de usuario ──────────────────────────────────────────────────────────
+  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.font = 'bold 34px "Inter"'; ctx.fillStyle = '#FFFFFF';
+  ctx.fillText(member.user.username, textX + 34, 60);
+
+  // ── Línea divisoria con destello a la derecha ─────────────────────────────────
+  const lineY = 96;
+  const lineGrad = ctx.createLinearGradient(textX, lineY, W - 50, lineY);
+  lineGrad.addColorStop(0, 'rgba(255,80,80,0.9)');
+  lineGrad.addColorStop(0.85, 'rgba(255,80,80,0.9)');
+  lineGrad.addColorStop(1, 'rgba(255,80,80,0)');
+  ctx.strokeStyle = lineGrad; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(textX, lineY); ctx.lineTo(W - 50, lineY); ctx.stroke();
+
+  // ── Texto de advertencia (bilingüe, del bloque original) ─────────────────────
+  ctx.font = 'bold 19px "Inter"'; ctx.fillStyle = '#ff4d4d';
+  wrapText(ctx, reasonText, textX, 128, W - textX - 50, 27);
 
   return canvas.toBuffer('image/png');
 }
@@ -514,18 +589,21 @@ async function applyModerationStrike(message, reasonText, extraMessagesToDelete 
 
   try {
     const image = await createWarningImage(message.member, reasonText);
-    await message.channel.send({ files: [new AttachmentBuilder(image, { name: 'warning.png' })] });
+    await message.channel.send({
+      content: `<@${userId}>`,
+      files: [new AttachmentBuilder(image, { name: 'warning.png' })]
+    });
   } catch (err) { console.error('Error generando imagen de advertencia:', err); }
 
   if (current >= 2) {
-    if (message.member.kickable) {
-      await message.member.kick('2da infracción: links/spam no permitido').catch(err => {
-        console.error('Error expulsando miembro:', err);
+    if (message.member.bannable) {
+      await message.member.ban({ reason: '2da infracción: links/spam no permitido' }).catch(err => {
+        console.error('Error baneando miembro:', err);
       });
       warnings[guildId][userId] = 0;
       saveWarnings(warnings);
     } else {
-      console.error(`No se pudo expulsar a ${message.author.tag}: sin permisos suficientes.`);
+      console.error(`No se pudo banear a ${message.author.tag}: sin permisos suficientes.`);
     }
   }
 }
@@ -550,6 +628,64 @@ function registerMessageForSpamCheck(message) {
   return null;
 }
 
+// ── Protección de @everyone (solo dueño/admins pueden usarlo) ─────────────────
+const EVERYONE_WARNINGS_FILE = path.join(__dirname, 'everyone-warnings.json');
+
+function loadEveryoneWarnings() {
+  try { return JSON.parse(fs.readFileSync(EVERYONE_WARNINGS_FILE, 'utf8')); }
+  catch { return {}; }
+}
+function saveEveryoneWarnings(data) {
+  fs.writeFileSync(EVERYONE_WARNINGS_FILE, JSON.stringify(data, null, 2), 'utf8');
+}
+
+async function applyEveryoneStrike(message) {
+  const warnings = loadEveryoneWarnings();
+  const guildId  = message.guild.id;
+  const userId   = message.author.id;
+  if (!warnings[guildId]) warnings[guildId] = {};
+  const current = (warnings[guildId][userId] || 0) + 1;
+  warnings[guildId][userId] = current;
+  saveEveryoneWarnings(warnings);
+
+  await message.delete().catch(() => {});
+
+  const reasonText = 'Don\'t use the everyone again or you will be eliminated';
+  try {
+    const image = await createWarningImage(message.member, reasonText);
+    await message.channel.send({
+      content: `<@${userId}>`,
+      files: [new AttachmentBuilder(image, { name: 'warning.png' })]
+    });
+  } catch (err) { console.error('Error generando imagen de advertencia (everyone):', err); }
+
+  if (current >= 2) {
+    // ── 2da vez: le quita el permiso de escribir en este canal ────────────────
+    try {
+      await message.channel.permissionOverwrites.edit(userId, { SendMessages: false });
+    } catch (err) {
+      console.error(`No se pudo restringir el canal para ${message.author.tag}:`, err);
+    }
+    return;
+  }
+
+  // ── 1ra vez: mute 1 hora + borra mensajes del último minuto ─────────────────
+  if (message.member.moderatable) {
+    await message.member.timeout(60 * 60 * 1000, 'Uso no autorizado de @everyone').catch(err => {
+      console.error('Error muteando miembro:', err);
+    });
+  } else {
+    console.error(`No se pudo mutear a ${message.author.tag}: sin permisos suficientes.`);
+  }
+
+  try {
+    const recent    = await message.channel.messages.fetch({ limit: 100 });
+    const oneMinAgo = Date.now() - 60000;
+    const toDelete  = recent.filter(m => m.author.id === userId && m.createdTimestamp >= oneMinAgo);
+    if (toDelete.size > 0) await message.channel.bulkDelete(toDelete, true).catch(() => {});
+  } catch (err) { console.error('Error borrando mensajes recientes:', err); }
+}
+
 // ── Recordatorios ────────────────────────────────────────────────────────────
 const REMINDERS_FILE = path.join(__dirname, 'reminders.json');
 const activeTimers   = new Map();
@@ -566,7 +702,11 @@ function startReminder(reminder) {
   const timer = setInterval(async () => {
     try {
       const channel = await client.channels.fetch(reminder.channelId);
-      if (channel?.isTextBased()) await channel.send(reminder.message);
+      if (channel?.isTextBased()) {
+        const payload = { content: reminder.message };
+        if (reminder.attachmentUrl) payload.files = [reminder.attachmentUrl];
+        await channel.send(payload);
+      }
     } catch (err) { console.error(`Error enviando recordatorio ${reminder.id}:`, err); }
   }, reminder.intervalMs);
   activeTimers.set(reminder.id, timer);
@@ -590,7 +730,8 @@ const reminderCommand = new SlashCommandBuilder()
   .addStringOption(opt => opt.setName('intervalo').setDescription('Cada cuánto enviar (ej: 30m, 2h, 1d)').setRequired(true))
   .addChannelOption(opt => opt.setName('canal').setDescription('Canal donde se enviará el mensaje').setRequired(true))
   .addStringOption(opt => opt.setName('mensaje').setDescription('Mensaje del recordatorio').setRequired(true))
-  .addStringOption(opt => opt.setName('id').setDescription('Nombre único para este recordatorio').setRequired(true));
+  .addStringOption(opt => opt.setName('id').setDescription('Nombre único para este recordatorio').setRequired(true))
+  .addAttachmentOption(opt => opt.setName('archivo').setDescription('Imagen o video para adjuntar (opcional)').setRequired(false));
 
 const deleteCommand = new SlashCommandBuilder()
   .setName('borrar-recordatorio')
@@ -648,14 +789,15 @@ client.on('interactionCreate', async interaction => {
     const channel     = interaction.options.getChannel('canal');
     const message     = interaction.options.getString('mensaje');
     const id          = interaction.options.getString('id').toLowerCase().replace(/\s+/g, '-');
+    const attachment  = interaction.options.getAttachment('archivo');
     const ms          = parseInterval(intervalStr);
     if (!ms) return interaction.reply({ content: '❌ Formato inválido. Usá: `30m`, `2h`, `1d`, `90s`', ephemeral: true });
     if (ms < 60000) return interaction.reply({ content: '❌ El intervalo mínimo es 1 minuto.', ephemeral: true });
     const reminders = loadReminders();
     if (reminders.find(r => r.id === id)) return interaction.reply({ content: `❌ Ya existe un recordatorio con el ID \`${id}\`.`, ephemeral: true });
-    const reminder = { id, channelId: channel.id, message, intervalMs: ms };
+    const reminder = { id, channelId: channel.id, message, intervalMs: ms, attachmentUrl: attachment ? attachment.url : null };
     reminders.push(reminder); saveReminders(reminders); startReminder(reminder);
-    return interaction.reply({ content: `✅ Recordatorio \`${id}\` creado.\n📣 Canal: <#${channel.id}>\n⏱ Cada: **${intervalStr.toLowerCase()}**\n💬 Mensaje: ${message}`, ephemeral: true });
+    return interaction.reply({ content: `✅ Recordatorio \`${id}\` creado.\n📣 Canal: <#${channel.id}>\n⏱ Cada: **${intervalStr.toLowerCase()}**\n💬 Mensaje: ${message}${attachment ? `\n📎 Adjunto: ${attachment.name}` : ''}`, ephemeral: true });
   }
 
   // ── /borrar-recordatorio ───────────────────────────────────────────────────
@@ -734,19 +876,25 @@ client.on('messageCreate', async message => {
 
     const isAdmin = message.member?.permissions.has(PermissionFlagsBits.Administrator);
 
+    // Moderación: @everyone no autorizado (solo dueño/admins pueden usarlo)
+    if (!isAdmin && message.content.includes('@everyone')) {
+      await applyEveryoneStrike(message);
+      return;
+    }
+
     if (!isAdmin) {
       // Moderación: link no permitido
       const allowedDomains = loadAllowedLinks();
       const badLink        = findDisallowedLink(message.content, allowedDomains);
       if (badLink) {
-        await applyModerationStrike(message, 'Attempting to send links from other channels, this is not allowed.');
+        await applyModerationStrike(message, 'Do not send links, it is not allowed to send, do not send another one or else if you will not be permanently banned');
         return;
       }
       // Moderación: spam
       if (message.content.trim().length > 0) {
         const spamMessages = registerMessageForSpamCheck(message);
         if (spamMessages) {
-          await applyModerationStrike(message, 'Sending repeated messages (spam) is not allowed.', spamMessages);
+          await applyModerationStrike(message, "Don't spam again or you'll be banned.", spamMessages);
           return;
         }
       }
