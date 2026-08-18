@@ -67,6 +67,32 @@ function markProcessed(set, key, ttlMs = 15000) {
   return true;
 }
 
+// ── Deduplicación real (contra Discord, no contra memoria del proceso) ────────
+// El Set de arriba solo protege DENTRO de un mismo proceso. Si hubiera más de
+// un proceso vivo (zombie de un deploy viejo, etc.), cada uno manda su propia
+// tarjeta sin saber del otro. Esto en cambio mira los mensajes reales del canal
+// (que ambos procesos ven igual) y borra las tarjetas propias repetidas que
+// mencionan al mismo usuario dentro de los últimos 30s, quedándose con la más vieja.
+const DEDUPE_WINDOW_MS = 30000;
+async function deduplicateOwnMention(channel, userId) {
+  try {
+    const recent = await channel.messages.fetch({ limit: 30 });
+    const now    = Date.now();
+    const dupes  = recent.filter(m =>
+      m.author.id === client.user.id &&
+      m.content.includes(`<@${userId}>`) &&
+      (now - m.createdTimestamp) <= DEDUPE_WINDOW_MS
+    );
+    if (dupes.size <= 1) return;
+    const sorted = [...dupes.values()].sort((a, b) => a.createdTimestamp - b.createdTimestamp);
+    for (let i = 1; i < sorted.length; i++) {
+      await sorted[i].delete().catch(() => {});
+    }
+  } catch (err) {
+    console.error('Error deduplicando mensajes propios:', err);
+  }
+}
+
 // ── ID de instancia — ayuda a detectar si hay 2 procesos corriendo a la vez ──
 const INSTANCE_ID = Math.random().toString(36).slice(2, 8);
 console.log(`🔖 Instancia iniciada: ${INSTANCE_ID} (PID ${process.pid})`);
@@ -594,6 +620,7 @@ async function applyModerationStrike(message, reasonText, extraMessagesToDelete 
       files: [new AttachmentBuilder(image, { name: 'warning.png' })]
     });
   } catch (err) { console.error('Error generando imagen de advertencia:', err); }
+  await deduplicateOwnMention(message.channel, userId);
 
   if (current >= 2) {
     if (message.member.bannable) {
@@ -658,6 +685,7 @@ async function applyEveryoneStrike(message) {
       files: [new AttachmentBuilder(image, { name: 'warning.png' })]
     });
   } catch (err) { console.error('Error generando imagen de advertencia (everyone):', err); }
+  await deduplicateOwnMention(message.channel, userId);
 
   if (current >= 2) {
     // ── 2da vez: le quita el permiso de escribir en este canal ────────────────
