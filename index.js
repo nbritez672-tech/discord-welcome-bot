@@ -19,6 +19,7 @@ const {
 const os   = require('os');
 const fs   = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 // ── Fuentes ──────────────────────────────────────────────────────────────────
 async function loadFonts() {
@@ -65,6 +66,17 @@ function markProcessed(set, key, ttlMs = 15000) {
   set.add(key);
   setTimeout(() => set.delete(key), ttlMs);
   return true;
+}
+
+// ── Idempotencia nativa de Discord ─────────────────────────────────────────
+// Discord rechaza dos mensajes creados con el mismo nonce cuando enforceNonce
+// está activo. La clave se deriva del evento lógico, no del proceso, por lo que
+// también protege si dos instancias reciben el mismo evento simultáneamente.
+function messageNonce(...parts) {
+  return crypto.createHash('sha256').update(parts.join(':')).digest('hex').slice(0, 32);
+}
+function withMessageNonce(payload, ...parts) {
+  return { ...payload, nonce: messageNonce(...parts), enforceNonce: true };
 }
 
 // ── Deduplicación real (contra Discord, no contra memoria del proceso) ────────
@@ -657,10 +669,10 @@ async function applyModerationStrike(message, reasonText, extraMessagesToDelete 
 
   try {
     const image = await createWarningImage(message.member, reasonText);
-    await message.channel.send({
+    await message.channel.send(withMessageNonce({
       content: `<@${userId}>`,
       files: [new AttachmentBuilder(image, { name: 'warning.png' })]
-    });
+    }, 'moderation-warning', guildId, message.channel.id, message.id));
   } catch (err) { console.error('Error generando imagen de advertencia:', err); }
   await deduplicateOwnMention(message.channel, userId);
 
@@ -722,10 +734,10 @@ async function applyEveryoneStrike(message) {
   const reasonText = 'Don\'t use the everyone again or you will be eliminated';
   try {
     const image = await createWarningImage(message.member, reasonText);
-    await message.channel.send({
+    await message.channel.send(withMessageNonce({
       content: `<@${userId}>`,
       files: [new AttachmentBuilder(image, { name: 'warning.png' })]
-    });
+    }, 'everyone-warning', guildId, message.channel.id, message.id));
   } catch (err) { console.error('Error generando imagen de advertencia (everyone):', err); }
   await deduplicateOwnMention(message.channel, userId);
 
@@ -775,7 +787,8 @@ function startReminder(reminder) {
       if (channel?.isTextBased()) {
         const payload = { content: reminder.message };
         if (reminder.attachmentUrl) payload.files = [reminder.attachmentUrl];
-        await channel.send(payload);
+        const slot = Math.floor(Date.now() / reminder.intervalMs);
+        await channel.send(withMessageNonce(payload, 'reminder', reminder.channelId, reminder.id, slot));
       }
     } catch (err) { console.error(`Error enviando recordatorio ${reminder.id}:`, err); }
   }, reminder.intervalMs);
@@ -929,10 +942,10 @@ client.on('guildMemberAdd', async (member) => {
       return;
     }
     const image = await createWelcomeImage(member);
-    const sent = await channel.send({
+    const sent = await channel.send(withMessageNonce({
       content: `✦ ***Welcome a Yin Yang | Script Hub*** ✦ ${member}\n> 👤 Eres el miembro **#${member.guild.memberCount}** de nuestro servidor\n> 📜 Leé las reglas y bienvenido/a a la comunidad`,
       files  : [new AttachmentBuilder(image, { name: 'welcome.png' })],
-    });
+    }, 'welcome', member.guild.id, member.id));
     console.log(`✅ [${INSTANCE_ID}] bienvenida enviada — miembro ${member.id}, mensaje ${sent.id}`);
     await cleanupWelcomeDuplicates(channel, member.id);
   } catch (err) {
