@@ -276,7 +276,7 @@ async function createWelcomeImage(member) {
 const ALLOWED_LINKS_FILE = path.join(__dirname, 'allowed-links.json');
 const WARNINGS_FILE      = path.join(__dirname, 'warnings.json');
 
-const URL_REGEX           = /(https?:\/\/[^\s]+)|(discord(?:\.gg|app\.com\/invite|\.com\/invite)\/[^\s]+)/gi;
+const URL_REGEX           = /(https?:\/\/[^\s"'<>]+)|(discord(?:\.gg|app\.com\/invite|\.com\/invite)\/[^\s"'<>]+)/gi;
 const DISCORD_INVITE_REGEX = /discord(?:\.gg|app\.com\/invite|\.com\/invite)\//i;
 
 function loadAllowedLinks() {
@@ -311,7 +311,7 @@ function normalizeLinkPath(url) {
     const normalized = url.match(/^https?:\/\//i) ? url : `https://${url}`;
     const u = new URL(normalized);
     const host = u.hostname.replace(/^www\./i, '').toLowerCase();
-    const path = u.pathname.replace(/\/+$/, ''); // sin barra final
+    const path = u.pathname.replace(/\/+$/, '').toLowerCase(); // sin barra final, sin distinguir mayúsculas (igual que la whitelist)
     return host + path;
   } catch { return null; }
 }
@@ -792,8 +792,12 @@ client.on('messageReactionAdd', async (reaction, user) => {
 // ventana donde ambos responden a los mismos eventos (bienvenidas/avisos duplicados).
 process.on('SIGTERM', () => {
   console.log('🛑 SIGTERM recibido — cerrando conexión con Discord...');
-  client.destroy();
-  process.exit(0);
+  client.destroy()
+    .then(() => console.log('✅ Conexión cerrada limpiamente'))
+    .catch(err => console.error('Error cerrando conexión:', err))
+    .finally(() => process.exit(0));
+  // Salvavidas: si algo cuelga, no dejar el proceso vivo más de 5s igual
+  setTimeout(() => process.exit(0), 5000);
 });
 
 // ── Arranque ──────────────────────────────────────────────────────────────────
