@@ -106,47 +106,142 @@ function roundRect(ctx, x, y, width, height, radius) {
   ctx.closePath();
 }
 
+// Dibuja un símbolo yin-yang clásico (split S + dos puntos) en (cx, cy) con radio r
+function drawYinYang(ctx, cx, cy, r) {
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.closePath();
+  ctx.clip();
+
+  ctx.fillStyle = '#f2f2f2';
+  ctx.fillRect(cx - r, cy - r, r * 2, r);
+  ctx.fillStyle = '#0a0a0a';
+  ctx.fillRect(cx - r, cy, r * 2, r);
+
+  ctx.fillStyle = '#0a0a0a';
+  ctx.beginPath();
+  ctx.arc(cx, cy - r / 2, r / 2, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = '#f2f2f2';
+  ctx.beginPath();
+  ctx.arc(cx, cy + r / 2, r / 2, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = '#f2f2f2';
+  ctx.beginPath();
+  ctx.arc(cx, cy - r / 2, r / 6, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = '#0a0a0a';
+  ctx.beginPath();
+  ctx.arc(cx, cy + r / 2, r / 6, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+}
+
+// Dibuja un icono tipo "hamburguesa" (3 barritas) centrado en (cx, cy)
+function drawHamburger(ctx, cx, cy, w, color) {
+  ctx.fillStyle = color;
+  for (let i = -1; i <= 1; i++) {
+    ctx.fillRect(cx - w / 2, cy + i * 4 - 1, w, 2);
+  }
+}
+
 async function createWelcomeImage(member) {
   const W = 860;
   const H = 280;
+  const R = 22; // radio de esquina de toda la tarjeta
   const canvas = createCanvas(W, H);
   const ctx = canvas.getContext('2d');
 
-  const bgGrad = ctx.createLinearGradient(0, 0, W, H);
-  bgGrad.addColorStop(0,   '#080808');
-  bgGrad.addColorStop(0.5, '#0f0f0f');
-  bgGrad.addColorStop(1,   '#060606');
+  ctx.fillStyle = '#050505';
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.save();
+  roundRect(ctx, 0, 0, W, H, R);
+  ctx.clip();
+
+  // Fondo metálico oscuro con highlight superior
+  const bgGrad = ctx.createLinearGradient(0, 0, 0, H);
+  bgGrad.addColorStop(0,    '#1c1c1c');
+  bgGrad.addColorStop(0.18, '#0d0d0d');
+  bgGrad.addColorStop(1,    '#050505');
   ctx.fillStyle = bgGrad;
   ctx.fillRect(0, 0, W, H);
 
-  // Borde superior: blanco (Yang)
-  const borderTop = ctx.createLinearGradient(0, 0, W, 0);
-  borderTop.addColorStop(0,   '#d4d4d4');
-  borderTop.addColorStop(0.5, '#ffffff');
-  borderTop.addColorStop(1,   '#d4d4d4');
-  ctx.fillStyle = borderTop;
-  ctx.fillRect(0, 0, W, 3);
-  // Borde inferior: carmesí (Yin)
-  const borderBot = ctx.createLinearGradient(0, 0, W, 0);
-  borderBot.addColorStop(0,   '#7f1d1d');
-  borderBot.addColorStop(0.5, '#dc2626');
-  borderBot.addColorStop(1,   '#7f1d1d');
-  ctx.fillStyle = borderBot;
-  ctx.fillRect(0, H - 3, W, 3);
-
-  const avatarSize = 140;
-  const avatarX    = 80 + avatarSize / 2;
+  const avatarSize = 132;
+  const avatarX    = 76 + avatarSize / 2;
   const avatarY    = H / 2;
+  const divX       = 76 + avatarSize + 50;
 
+  // ── Panel izquierdo: split diagonal blanco/negro (estilo Yin Yang) ────────
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, 0, divX, H);
+  ctx.clip();
+
+  ctx.fillStyle = '#0a0a0a';
+  ctx.fillRect(0, 0, divX, H);
+
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(divX * 0.7, 0);
+  ctx.lineTo(divX * 0.18, H);
+  ctx.lineTo(0, H);
+  ctx.closePath();
+  const panelGrad = ctx.createLinearGradient(0, 0, divX, H);
+  panelGrad.addColorStop(0, '#fafafa');
+  panelGrad.addColorStop(1, '#c4c4c4');
+  ctx.fillStyle = panelGrad;
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.moveTo(divX * 0.7, 0);
+  ctx.lineTo(divX * 0.18, H);
+  ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Remaches yin-yang sobre el panel blanco
+  drawYinYang(ctx, 26, 26, 8);
+  drawYinYang(ctx, 26, H - 26, 8);
+
+  ctx.restore();
+
+  // ── Divisor vertical con símbolo yin-yang central con glow ────────────────
+  const divGrad = ctx.createLinearGradient(0, 30, 0, H - 30);
+  divGrad.addColorStop(0,   'rgba(255,255,255,0)');
+  divGrad.addColorStop(0.3, 'rgba(255,255,255,0.55)');
+  divGrad.addColorStop(0.7, 'rgba(255,255,255,0.55)');
+  divGrad.addColorStop(1,   'rgba(255,255,255,0)');
+  ctx.fillStyle = divGrad;
+  ctx.fillRect(divX, 30, 2, H - 60);
+
+  ctx.save();
+  ctx.shadowColor = '#ffffff';
+  ctx.shadowBlur  = 14;
+  drawYinYang(ctx, divX, avatarY, 13);
+  ctx.restore();
+
+  // ── Avatar: anillo tipo cápsula con dos remaches ───────────────────────────
   const ringGrad = ctx.createLinearGradient(
     avatarX - avatarSize / 2, avatarY - avatarSize / 2,
     avatarX + avatarSize / 2, avatarY + avatarSize / 2
   );
   ringGrad.addColorStop(0, '#ffffff');
-  ringGrad.addColorStop(1, '#9ca3af');
+  ringGrad.addColorStop(1, '#8a8a8a');
   ctx.beginPath();
-  ctx.arc(avatarX, avatarY, avatarSize / 2 + 5, 0, Math.PI * 2);
-  ctx.lineWidth = 4;
+  ctx.arc(avatarX, avatarY, avatarSize / 2 + 6, 0, Math.PI * 2);
+  ctx.lineWidth   = 4;
   ctx.strokeStyle = ringGrad;
   ctx.stroke();
 
@@ -161,64 +256,114 @@ async function createWelcomeImage(member) {
   ctx.drawImage(avatar, avatarX - avatarSize / 2, avatarY - avatarSize / 2, avatarSize, avatarSize);
   ctx.restore();
 
-  const divX    = 80 + avatarSize + 40;
-  const divGrad = ctx.createLinearGradient(0, 40, 0, H - 40);
-  divGrad.addColorStop(0,   'rgba(255,255,255,0)');
-  divGrad.addColorStop(0.3, 'rgba(255,255,255,0.6)');
-  divGrad.addColorStop(0.7, 'rgba(255,255,255,0.6)');
-  divGrad.addColorStop(1,   'rgba(255,255,255,0)');
-  ctx.fillStyle = divGrad;
-  ctx.fillRect(divX, 40, 2, H - 80);
+  const rivetR = avatarSize / 2 + 6;
+  for (const angleDeg of [45, 225]) {
+    const rad = (angleDeg * Math.PI) / 180;
+    const rx  = avatarX + Math.cos(rad) * rivetR;
+    const ry  = avatarY + Math.sin(rad) * rivetR;
+    ctx.beginPath();
+    ctx.arc(rx, ry, 5, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffffff';
+    ctx.fill();
+    ctx.lineWidth   = 1;
+    ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+    ctx.stroke();
+  }
 
-  const textX = divX + 36;
+  // ── Texto ──────────────────────────────────────────────────────────────────
+  const textX = divX + 38;
   ctx.textBaseline = 'middle';
-  ctx.shadowColor  = 'rgba(0,0,0,0.9)';
-  ctx.shadowBlur   = 12;
+  ctx.textAlign    = 'left';
 
-  // Tag "✦ WELCOME A YIN YANG ✦" — carmesí → blanco
-  ctx.textAlign = 'left';
-  ctx.font      = '15px "BebasNeue"';
-  const tagGrad = ctx.createLinearGradient(textX, 0, textX + 380, 0);
-  tagGrad.addColorStop(0,   '#dc2626');
-  tagGrad.addColorStop(0.5, '#ffffff');
-  tagGrad.addColorStop(1,   '#dc2626');
-  ctx.fillStyle = tagGrad;
-  ctx.fillText('✦  WELCOME A YIN YANG  ✦', textX, 88);
+  // Pill "WELCOME A YIN YANG" con iconos hamburguesa a los lados
+  ctx.font = '15px "BebasNeue"';
+  const tagText  = 'WELCOME A YIN YANG';
+  const tagW     = ctx.measureText(tagText).width;
+  const hbW      = 12;
+  const innerGap = 10;
+  const pillPadX = 16;
+  const pillW    = pillPadX * 2 + hbW + innerGap + tagW + innerGap + hbW;
+  const pillH    = 30;
+  const pillX    = textX;
+  const pillY    = 68;
 
-  // Nombre de usuario — Bebas Neue grande, blanco puro
-  ctx.font      = '62px "BebasNeue"';
-  ctx.fillStyle = '#ffffff';
+  ctx.fillStyle = 'rgba(255,255,255,0.05)';
+  roundRect(ctx, pillX, pillY - pillH / 2, pillW, pillH, pillH / 2);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+  ctx.lineWidth   = 1;
+  roundRect(ctx, pillX, pillY - pillH / 2, pillW, pillH, pillH / 2);
+  ctx.stroke();
+
+  drawHamburger(ctx, pillX + pillPadX + hbW / 2, pillY, hbW, '#dc2626');
+  ctx.shadowColor = 'rgba(0,0,0,0.6)';
+  ctx.shadowBlur  = 6;
+  ctx.fillStyle   = '#e5e5e5';
+  ctx.fillText(tagText, pillX + pillPadX + hbW + innerGap, pillY);
+  ctx.shadowBlur  = 0;
+  drawHamburger(ctx, pillX + pillPadX + hbW + innerGap + tagW + innerGap + hbW / 2, pillY, hbW, '#dc2626');
+
+  // Nombre de usuario — Bebas Neue grande, con glow blanco
+  ctx.font = '58px "BebasNeue"';
   let displayName = member.user.username;
   while (ctx.measureText(displayName).width > W - textX - 30 && displayName.length > 4) {
     displayName = displayName.slice(0, -1);
   }
   if (displayName !== member.user.username) displayName += '…';
-  ctx.fillText(displayName, textX, 148);
+
+  ctx.save();
+  ctx.shadowColor = 'rgba(255,255,255,0.55)';
+  ctx.shadowBlur  = 18;
+  ctx.fillStyle   = '#ffffff';
+  ctx.fillText(displayName, textX, 136);
+  ctx.restore();
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(displayName, textX, 136);
 
   // "en Yin Yang | Script Hub" — gris plata
-  ctx.font      = '22px "BebasNeue"';
-  ctx.fillStyle = '#9ca3af';
-  ctx.fillText(`en ${member.guild.name}`, textX, 196);
+  ctx.font        = '21px "BebasNeue"';
+  ctx.fillStyle   = '#9ca3af';
+  ctx.shadowColor = 'rgba(0,0,0,0.6)';
+  ctx.shadowBlur  = 6;
+  ctx.fillText(`en ${member.guild.name}`, textX, 180);
+  ctx.shadowBlur  = 0;
 
-  const badgeX = textX;
-  const badgeY = 228;
-  const badgeW = 180;
-  const badgeH = 30;
-  ctx.shadowBlur = 0;
+  // Pill inferior "MIEMBRO | #XXXX" con icono yin-yang incrustado
+  ctx.font = '15px "BebasNeue"';
+  const memberText = `MIEMBRO   |   #${member.guild.memberCount}`;
+  const memberW    = ctx.measureText(memberText).width;
+  const badgeIconR = 8;
+  const badgePadX  = 14;
+  const badgeGap   = 10;
+  const badgeH     = 32;
+  const badgeW     = badgePadX * 2 + badgeIconR * 2 + badgeGap + memberW;
+  const badgeX     = textX;
+  const badgeY     = 216;
 
-  ctx.fillStyle = 'rgba(255,255,255,0.08)';
-  roundRect(ctx, badgeX, badgeY - badgeH / 2, badgeW, badgeH, 6);
+  ctx.fillStyle = 'rgba(255,255,255,0.06)';
+  roundRect(ctx, badgeX, badgeY - badgeH / 2, badgeW, badgeH, badgeH / 2);
   ctx.fill();
-
   ctx.strokeStyle = 'rgba(255,255,255,0.18)';
   ctx.lineWidth   = 1;
-  roundRect(ctx, badgeX, badgeY - badgeH / 2, badgeW, badgeH, 6);
+  roundRect(ctx, badgeX, badgeY - badgeH / 2, badgeW, badgeH, badgeH / 2);
   ctx.stroke();
 
-  ctx.font      = '16px "BebasNeue"';
+  drawYinYang(ctx, badgeX + badgePadX + badgeIconR, badgeY, badgeIconR);
+
   ctx.fillStyle = '#e5e5e5';
-  ctx.textAlign = 'left';
-  ctx.fillText(`MIEMBRO  #${member.guild.memberCount}`, badgeX + 10, badgeY);
+  ctx.fillText(memberText, badgeX + badgePadX + badgeIconR * 2 + badgeGap, badgeY);
+
+  ctx.restore(); // fin clip de la tarjeta redondeada
+
+  // ── Borde metálico exterior ───────────────────────────────────────────────
+  const borderGrad = ctx.createLinearGradient(0, 0, W, H);
+  borderGrad.addColorStop(0,   'rgba(255,255,255,0.5)');
+  borderGrad.addColorStop(0.5, 'rgba(255,255,255,0.12)');
+  borderGrad.addColorStop(1,   'rgba(255,255,255,0.4)');
+  roundRect(ctx, 1, 1, W - 2, H - 2, R);
+  ctx.strokeStyle = borderGrad;
+  ctx.lineWidth   = 1.5;
+  ctx.stroke();
 
   return canvas.toBuffer('image/png');
 }
