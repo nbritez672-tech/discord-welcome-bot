@@ -73,7 +73,7 @@ function markProcessed(set, key, ttlMs = 15000) {
 // está activo. La clave se deriva del evento lógico, no del proceso, por lo que
 // también protege si dos instancias reciben el mismo evento simultáneamente.
 function messageNonce(...parts) {
-  return crypto.createHash('sha256').update(parts.join(':')).digest('hex').slice(0, 32);
+  return crypto.createHash('sha256').update(parts.join(':')).digest('hex').slice(0, 25);
 }
 function withMessageNonce(payload, ...parts) {
   return { ...payload, nonce: messageNonce(...parts), enforceNonce: true };
