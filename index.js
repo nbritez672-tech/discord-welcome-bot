@@ -172,6 +172,47 @@ function getMemberTag(member) {
   return roles.length ? roles[0].name : 'Miembro';
 }
 
+// ── Rol automático de miembros ───────────────────────────────────────────────
+const MEMBER_ROLE_NAME  = 'miembro';
+const MEMBER_ROLE_COLOR = 0x808080; // gris #808080
+
+async function assignMemberRole(member) {
+  try {
+    let role = member.guild.roles.cache.find(
+      candidate => candidate.name.toLowerCase() === MEMBER_ROLE_NAME
+    );
+
+    if (!role) {
+      role = await member.guild.roles.create({
+        name: MEMBER_ROLE_NAME,
+        color: MEMBER_ROLE_COLOR,
+        reason: 'Rol automático para nuevos miembros',
+      });
+      console.log(`✅ [${INSTANCE_ID}] rol "${MEMBER_ROLE_NAME}" creado en gris`);
+    } else if (role.color !== MEMBER_ROLE_COLOR && role.editable) {
+      await role.edit({
+        color: MEMBER_ROLE_COLOR,
+        reason: 'Mantener el color gris del rol automático de miembros',
+      });
+      console.log(`✅ [${INSTANCE_ID}] color del rol "${MEMBER_ROLE_NAME}" actualizado a gris`);
+    }
+
+    if (!role.editable) {
+      console.error(`❌ [${INSTANCE_ID}] no puedo administrar el rol "${role.name}"; sube el rol del bot por encima de ese rol`);
+      return false;
+    }
+
+    if (!member.roles.cache.has(role.id)) {
+      await member.roles.add(role, 'Asignación automática al entrar al servidor');
+      console.log(`✅ [${INSTANCE_ID}] rol "${role.name}" asignado a ${member.user.tag}`);
+    }
+    return true;
+  } catch (err) {
+    console.error(`❌ [${INSTANCE_ID}] error asignando el rol "${MEMBER_ROLE_NAME}" a ${member.user.tag}:`, err);
+    return false;
+  }
+}
+
 function roundRect(ctx, x, y, width, height, radius) {
   ctx.beginPath();
   ctx.moveTo(x + radius, y);
@@ -961,6 +1002,7 @@ client.on('guildMemberAdd', async (member) => {
     return;
   }
   try {
+    await assignMemberRole(member);
     const channel = await member.guild.channels.fetch(WELCOME_CHANNEL_ID);
     if (!channel?.isTextBased()) return;
     if (await recentWelcomeExists(channel, member.id)) {
