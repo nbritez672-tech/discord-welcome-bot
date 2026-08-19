@@ -480,6 +480,23 @@ function extractInviteCode(url) {
   const match = url.match(/discord(?:\.gg|app\.com\/invite|\.com\/invite)\/([a-z0-9-]+)/i);
   return match ? match[1].toLowerCase() : null;
 }
+
+// Algunos servicios publican el mismo contenido en varios hosts. Una entrada
+// simple como "youtube.com" o "tiktok.com" debe cubrir también sus enlaces
+// cortos y subdominios oficiales, pero no se aplica a entradas con una ruta.
+const LINK_DOMAIN_GROUPS = [
+  ['youtube', 'youtube.com', 'youtu.be'],
+  ['tiktok', 'tiktok.com', 'vm.tiktok.com', 'vt.tiktok.com', 'm.tiktok.com'],
+];
+
+function domainMatchesAllowed(domain, entry) {
+  const e = entry.toLowerCase().trim();
+  if (domain === e || domain.endsWith(`.${e}`)) return true;
+
+  const group = LINK_DOMAIN_GROUPS.find(hosts => hosts.includes(e));
+  return group ? group.some(host => domain === host || domain.endsWith(`.${host}`)) : false;
+}
+
 // ── Normaliza una entrada de la whitelist o un link recibido a "dominio/ruta" ─
 // Quita protocolo, "www.", y la barra final, todo en minúsculas.
 function normalizeLinkPath(url) {
@@ -507,8 +524,8 @@ function isLinkAllowed(raw, allowedDomains) {
       // Entrada con ruta específica — match exacto o subcarpeta de esa ruta
       return cleanedPath === e || cleanedPath.startsWith(`${e}/`);
     }
-    // Entrada de solo dominio — comportamiento original
-    return domain === e || domain.endsWith(`.${e}`);
+    // Entrada de solo dominio — incluye aliases oficiales del servicio.
+    return domainMatchesAllowed(domain, e);
   });
 }
 function findDisallowedLink(content, allowedDomains) {
