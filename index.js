@@ -903,26 +903,35 @@ client.on('interactionCreate', async interaction => {
 
   // ── /editar-links ──────────────────────────────────────────────────────────
   if (interaction.commandName === 'editar-links') {
-    const accion     = interaction.options.getString('accion');
-    const dominioRaw = interaction.options.getString('dominio');
-    const dominio    = normalizeLinkPath(dominioRaw);
-    if (!dominio) {
-      return interaction.reply({
-        content: '❌ Eso no parece un dominio o URL válida. Ejemplo: `tenor.com` (todo el dominio) o `raw.githubusercontent.com/tuUsuario/tuRepo` (solo ese repo).',
-        ephemeral: true,
-      });
-    }
-    const allowed = loadAllowedLinks();
-    if (accion === 'agregar') {
-      if (allowed.includes(dominio)) return interaction.reply({ content: `❌ \`${dominio}\` ya está en la lista.`, ephemeral: true });
-      allowed.push(dominio); saveAllowedLinks(allowed);
-      return interaction.reply({ content: `✅ \`${dominio}\` agregado.`, ephemeral: true });
-    }
-    if (accion === 'quitar') {
-      const idx = allowed.indexOf(dominio);
-      if (idx === -1) return interaction.reply({ content: `❌ \`${dominio}\` no está en la lista.`, ephemeral: true });
-      allowed.splice(idx, 1); saveAllowedLinks(allowed);
-      return interaction.reply({ content: `✅ \`${dominio}\` eliminado.`, ephemeral: true });
+    try {
+      // Confirmar la interacción inmediatamente y dejar el guardado fuera del límite de 3s.
+      await interaction.deferReply({ ephemeral: true });
+      const accion     = interaction.options.getString('accion');
+      const dominioRaw = interaction.options.getString('dominio');
+      const dominio    = normalizeLinkPath(dominioRaw);
+      if (!dominio) {
+        return interaction.editReply({
+          content: '❌ Eso no parece un dominio o URL válida. Ejemplo: `tenor.com` (todo el dominio) o `raw.githubusercontent.com/tuUsuario/tuRepo` (solo ese repo).',
+        });
+      }
+      const allowed = loadAllowedLinks();
+      if (accion === 'agregar') {
+        if (allowed.includes(dominio)) return interaction.editReply({ content: `❌ \`${dominio}\` ya está en la lista.` });
+        allowed.push(dominio); saveAllowedLinks(allowed);
+        return interaction.editReply({ content: `✅ \`${dominio}\` agregado.` });
+      }
+      if (accion === 'quitar') {
+        const idx = allowed.indexOf(dominio);
+        if (idx === -1) return interaction.editReply({ content: `❌ \`${dominio}\` no está en la lista.` });
+        allowed.splice(idx, 1); saveAllowedLinks(allowed);
+        return interaction.editReply({ content: `✅ \`${dominio}\` eliminado.` });
+      }
+      return interaction.editReply({ content: '❌ Acción no válida. Elegí agregar o quitar.' });
+    } catch (err) {
+      console.error('Error en /editar-links:', err);
+      const content = '❌ No pude guardar la lista de dominios. Revisá los permisos de administración o intentá nuevamente.';
+      if (interaction.deferred && !interaction.replied) return interaction.editReply({ content });
+      return interaction.reply({ content, ephemeral: true }).catch(() => {});
     }
   }
 
